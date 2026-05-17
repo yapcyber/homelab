@@ -1,0 +1,19 @@
+# =============================================================================
+# .sops.yaml — Configuration du chiffrement des secrets
+# =============================================================================
+# Ce fichier indique à SOPS comment chiffrer les fichiers selon leur chemin.
+# La clé AGE_PUBLIC_KEY est PUBLIQUE — elle peut être committée sur Git.
+# La clé PRIVÉE est dans ~/.config/sops/age/keys.txt — NE PAS committer.
+#
+# Usage :
+#   Chiffrer   : sops --encrypt services/media/.env > services/media/.enc.env
+#   Déchiffrer : sops --decrypt services/media/.enc.env > services/media/.env
+# =============================================================================
+
+creation_rules:
+  - path_regex: \.enc\.env$
+    age: >-
+      age10utnr3hnw29m9f5kypffsd6nteu8ppe58agw9ssnzuqzpn7jh9rqg2sj07
+  - path_regex: secrets/.*\.(yaml|json|env)$
+    age: >-
+      age10utnr3hnw29m9f5kypffsd6nteu8ppe58agw9ssnzuqzpn7jh9rqg2sj07

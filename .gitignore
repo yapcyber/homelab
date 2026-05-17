@@ -1,0 +1,76 @@
+# =============================================================================
+# .gitignore — Homelab yapserver.fr
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# SECRETS — JAMAIS sur Git, même chiffrés (sauf fichiers .enc explicitement)
+# -----------------------------------------------------------------------------
+secrets/
+.env
+.env.prod
+.env.test
+.env.local
+*.key
+*.pem
+*.p12
+*.pfx
+age.key
+
+# Fichiers OK à committer :
+#   .env.example  (templates avec des valeurs factices — AUCUN secret réel)
+#   .sops.yaml    (config SOPS — contient seulement la clé publique Age)
+#   *.enc.env     (fichiers .env chiffrés par SOPS)
+
+# -----------------------------------------------------------------------------
+# DONNÉES PERSISTANTES DES SERVICES
+# -----------------------------------------------------------------------------
+# Les données des containers (bases de données, médias, configs générées)
+# ne doivent pas être dans Git — elles vivent sur le NAS ou les volumes Proxmox
+data/
+volumes/
+backups/
+uploads/
+*.db
+*.sqlite
+*.sqlite3
+
+# -----------------------------------------------------------------------------
+# LOGS
+# -----------------------------------------------------------------------------
+*.log
+logs/
+loki-data/
+
+# -----------------------------------------------------------------------------
+# OS & ÉDITEURS
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.env.bak
+
+# -----------------------------------------------------------------------------
+# DOCKER
+# -----------------------------------------------------------------------------
+.docker/
+
+# -----------------------------------------------------------------------------
+# ANSIBLE
+# -----------------------------------------------------------------------------
+# Le fichier hosts contient des IPs et noms d'hôtes réels
+infrastructure/ansible/inventory/hosts
+infrastructure/ansible/inventory/*.ini
+*.retry
+
+# -----------------------------------------------------------------------------
+# CERTIFICATES (générés par Step-CA — stocker hors Git)
+# -----------------------------------------------------------------------------
+*.crt
+*.cert
+certs/
+pki/
