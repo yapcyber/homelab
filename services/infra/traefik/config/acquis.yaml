@@ -1,0 +1,35 @@
+# =============================================================================
+# config/acquis.yaml — Sources de logs pour CrowdSec
+# =============================================================================
+# "Acquisitions" = d'où CrowdSec doit lire les logs pour les analyser.
+# Chaque source a un type (label) qui détermine quel parser appliquer.
+#
+# FONCTIONNEMENT :
+#   1. CrowdSec lit les fichiers de log listés ici en temps réel (tail)
+#   2. Les parsers transforment les lignes brutes en événements structurés
+#   3. Les scénarios analysent les séquences d'événements
+#   4. Si un scénario détecte une attaque → décision de blocage (IP + durée)
+#   5. Le Bouncer Traefik applique la décision en temps réel
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Logs d'accès Traefik — Source principale des alertes
+# ---------------------------------------------------------------------------
+# Contient : IP source, URL, méthode, code réponse, User-Agent, timestamps
+# Parsers actifs : crowdsecurity/traefik-logs
+# Scénarios actifs : crowdsecurity/http-bad-user-agent, crowdsecurity/http-crawl-non_statics
+#                    crowdsecurity/http-path-traversal-probing, crowdsecurity/http-sqli-probing
+- source: file
+  filenames:
+    - /var/log/traefik/access.log
+  labels:
+    type: traefik
+
+# ---------------------------------------------------------------------------
+# Logs généraux Traefik — Erreurs d'infrastructure
+# ---------------------------------------------------------------------------
+- source: file
+  filenames:
+    - /var/log/traefik/traefik.log
+  labels:
+    type: traefik

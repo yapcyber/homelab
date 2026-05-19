@@ -1,0 +1,67 @@
+# =============================================================================
+# dynamic/tls.yml — Options TLS Traefik
+# =============================================================================
+# Définit les paramètres de négociation TLS appliqués aux connexions HTTPS.
+# Objectif : obtenir un score A+ sur SSLLabs et Qualys SSL Test.
+#
+# CONCEPTS CLÉS :
+#
+#   TLS 1.0 / 1.1 : Protocoles obsolètes avec des vulnérabilités connues
+#     (POODLE, BEAST). Tous les navigateurs modernes les ont dépréciés.
+#     → Désactivés.
+#
+#   Cipher Suites : Algorithmes cryptographiques utilisés pour la session.
+#     On ne garde que les suites avec ECDHE (Elliptic-Curve Diffie-Hellman
+#     Ephemeral) qui garantissent le Perfect Forward Secrecy.
+#     PFS = si la clé privée du serveur est compromise un jour, les sessions
+#     passées restent chiffrées (clé de session éphémère différente à chaque fois).
+#
+#   SNI Strict : Rejet des connexions sans Server Name Indication.
+#     Les clients TLS modernes envoient tous le SNI. Le rejeter empêche
+#     certains outils de scan de se connecter anonymement.
+# =============================================================================
+
+tls:
+  options:
+
+    # =========================================================================
+    # Configuration par défaut — appliquée à tous les routers websecure
+    # =========================================================================
+    default:
+      minVersion: VersionTLS12
+
+      # Strict SNI : le client doit indiquer le nom du serveur demandé
+      sniStrict: true
+
+      # Suites cryptographiques autorisées (ordre = préférence du serveur)
+      # Toutes avec ECDHE = Perfect Forward Secrecy garanti
+      # AES-GCM et ChaCha20-Poly1305 = chiffrement authentifié (AEAD)
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+
+      # Courbes elliptiques autorisées pour l'échange de clés ECDHE
+      curvePreferences:
+        - CurveP521
+        - CurveP384
+
+    # =========================================================================
+    # TLS 1.3 exclusif — Pour les services les plus sensibles
+    # =========================================================================
+    # TLS 1.3 supprime la négociation des cipher suites (elles sont fixes et
+    # toutes sécurisées), réduit la latence (1-RTT au lieu de 2-RTT), et
+    # améliore la confidentialité de la négociation initiale.
+    #
+    # USAGE dans les labels d'un service :
+    #   - "traefik.http.routers.monservice.tls.options=tls13only@file"
+    #
+    # Appliquer sur : Step-CA, Wazuh, services d'administration critique
+    tls13only:
+      minVersion: VersionTLS13
+      sniStrict: true
+      # Les cipher suites TLS 1.3 sont standardisées et non configurables :
+      # TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256

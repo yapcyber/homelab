@@ -1,0 +1,139 @@
+# =============================================================================
+# services/infra/traefik/docker-compose.yml
+# Phase 1.2 — Stack Traefik v3 + CrowdSec
+# =============================================================================
+#
+# ARCHITECTURE :
+#   Traefik      → Point d'entrée unique HTTPS. Lit les labels Docker pour router.
+#   CrowdSec     → Analyse les logs Traefik. Détecte les comportements malveillants.
+#   Bouncer      → Plugin Traefik qui interroge CrowdSec et bloque les IPs en temps réel.
+#
+# FLUX D'UNE REQUÊTE :
+#   Client → Traefik (port 443)
+#     → Plugin CrowdSec Bouncer (IP bloquée ? → 403 / IP OK → continue)
+#     → Middleware security-headers
+#     → Router (règle Host)
+#     → Service cible (container Docker)
+#
+# PRÉ-REQUIS AVANT docker compose up :
+#   bash init.sh   (créer le réseau, dossiers, et fichier acme.json)
+#   cp .env.example .env  (puis remplir les valeurs)
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # TRAEFIK — Reverse Proxy
+  # ===========================================================================
+  traefik:
+    image: traefik:v3.2
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true   # Le container ne peut PAS élever ses privilèges Linux
+    ports:
+      - "80:80"      # HTTP → redirigé vers HTTPS (voir entrypoint 'web' dans traefik.yml)
+      - "443:443"    # HTTPS → entrypoint principal
+      # - "8082:8082" # Métriques Prometheus (décommenter en Phase 5 — Wazuh/Grafana)
+    environment:
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - TZ=${TZ}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      # Le socket Docker est monté en LECTURE SEULE.
+      # Traefik peut lire les labels des containers, mais ne peut pas les créer/modifier.
+      # C'est le principe du moindre privilège appliqué à l'orchestration.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/traefik.yml:/etc/traefik/traefik.yml:ro       # Config statique (lecture seule)
+      - ./dynamic:/etc/traefik/dynamic:ro                        # Config dynamique (rechargée à chaud)
+      - ./data/acme-cloudflare.json:/data/acme-cloudflare.json  # Certificats Let's Encrypt
+      - ./data/logs:/logs                                        # Logs analysés par CrowdSec
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+
+      # -----------------------------------------------------------------------
+      # Dashboard Traefik
+      # -----------------------------------------------------------------------
+      # SÉCURITÉ : Accessible uniquement depuis le réseau interne (middleware
+      # internal-only) ET protégé par BasicAuth (middleware traefik-auth).
+      # Sans ces deux middlewares, le dashboard exposerait toute la config.
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth@file,internal-only@file,rate-limit@file"
+
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      crowdsec:
+        condition: service_healthy
+
+  # ===========================================================================
+  # CROWDSEC — Moteur de Détection d'Intrusion
+  # ===========================================================================
+  # CrowdSec ≠ firewall classique.
+  # Il analyse les COMPORTEMENTS dans les logs (séquences de requêtes, patterns
+  # d'attaque) et partage les décisions avec la communauté mondiale CrowdSec.
+  # Résultat : votre homelab bénéficie en temps réel des blocages décidés par
+  # des milliers d'autres instances CrowdSec dans le monde.
+  # ===========================================================================
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - TZ=${TZ}
+      - PGID=1000
+      # Collections = ensembles de parsers et scénarios de détection
+      # Installées automatiquement au premier démarrage :
+      #   crowdsecurity/traefik    → attaques détectées dans les logs Traefik
+      #   crowdsecurity/http-cve   → exploitation de CVEs HTTP connus
+      #   crowdsecurity/linux      → accès non autorisés aux fichiers système
+      #   crowdsecurity/sshd       → brute force SSH (pour les agents Wazuh aussi)
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/linux crowdsecurity/sshd
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data/crowdsec/db:/var/lib/crowdsec/data        # Base SQLite (décisions de blocage)
+      - ./data/crowdsec/config:/etc/crowdsec             # Config, parsers, scénarios
+      - ./config/acquis.yaml:/etc/crowdsec/acquis.yaml:ro  # Sources de logs à analyser
+      - ./data/logs:/var/log/traefik:ro                  # Logs Traefik (lecture seule)
+    networks:
+      - traefik-proxy
+    healthcheck:
+      test: ["CMD", "cscli", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+# =============================================================================
+# RÉSEAU DOCKER PARTAGÉ
+# =============================================================================
+# traefik-proxy est un réseau EXTERNE créé une seule fois :
+#   docker network create traefik-proxy
+#
+# Tous les services qui doivent être accessibles via Traefik rejoignent ce réseau
+# en ajoutant dans leur propre docker-compose.yml :
+#
+#   networks:
+#     traefik-proxy:
+#       external: true
+#       name: traefik-proxy
+#
+# Cela permet à Traefik de contacter les containers d'autres stacks
+# sans les exposer directement sur le réseau hôte.
+# =============================================================================
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy

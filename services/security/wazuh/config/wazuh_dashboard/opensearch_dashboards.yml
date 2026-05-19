@@ -1,0 +1,36 @@
+# =============================================================================
+# config/wazuh_dashboard/opensearch_dashboards.yml
+# Configuration du Dashboard Wazuh (OpenSearch Dashboards)
+# =============================================================================
+
+server.host: "0.0.0.0"
+server.port: 5601
+
+# Connexion au Wazuh Indexer (OpenSearch)
+opensearch.hosts: ["https://wazuh-indexer:9200"]
+opensearch.ssl.verificationMode: certificate
+opensearch.username: kibanaserver
+opensearch.password: ${WAZUH_DASHBOARD_PASSWORD}
+opensearch.ssl.certificateAuthorities: ["/usr/share/wazuh-dashboard/certs/root-ca.pem"]
+opensearch.requestHeadersAllowlist: ["securitytenant","Authorization"]
+
+# Certificats TLS du Dashboard lui-même
+# Note : Le TLS côté navigateur est géré par Traefik (Step-CA)
+# Ces certificats sont pour la communication Dashboard ↔ Indexer (interne)
+server.ssl.enabled: false
+
+# Localisation
+i18n.locale: "en"
+
+# Sécurité
+opensearch_security.multitenancy.enabled: true
+opensearch_security.multitenancy.tenants.preferred: ["Private", "Global"]
+opensearch_security.readonly_mode.roles: ["kibana_read_only"]
+opensearch_security.cookie.secure: true
+
+# Page d'accueil par défaut → Wazuh
+uiSettings.overrides.defaultRoute: /app/wz-home
+
+# Logging
+logging.dest: stdout
+logging.verbose: false

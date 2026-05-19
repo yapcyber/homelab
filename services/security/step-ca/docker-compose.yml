@@ -1,0 +1,147 @@
+# =============================================================================
+# services/security/step-ca/docker-compose.yml
+# Phase 1.2 — PKI interne avec Step-CA (Smallstep)
+# =============================================================================
+#
+# POURQUOI UNE PKI INTERNE ?
+#
+#   Le problème sans PKI interne :
+#     Les services internes (Proxmox UI, Netbox, Wazuh...) n'ont que deux options :
+#       1. HTTP en clair (inacceptable — les credentials traversent le réseau)
+#       2. Certificats auto-signés → warning "Not Secure" sur chaque navigateur
+#          et impossibilité de configurer HSTS proprement
+#
+#   La solution avec Step-CA :
+#     Step-CA crée une vraie Autorité de Certification locale.
+#     Elle émet des certificats TLS valides POUR VOTRE RÉSEAU.
+#     En installant son Root Certificate une seule fois sur vos appareils,
+#     TOUS les services internes deviennent HTTPS valides — zéro warning.
+#
+#   L'analogie : Step-CA joue le même rôle que Let's Encrypt, mais pour
+#   votre réseau interne. Il utilise même le protocole ACME (RFC 8555),
+#   celui de Let's Encrypt. Traefik sait déjà parler ACME.
+#
+# ARCHITECTURE DANS CE HOMELAB :
+#
+#   ┌──────────────────────────────────────────────────────────┐
+#   │  VLAN 10 - Management (VM dédiée)                        │
+#   │                                                          │
+#   │  ┌─────────────────────────────────────────────────┐    │
+#   │  │  Step-CA (port 9000)                            │    │
+#   │  │  Endpoint ACME : https://10.0.10.20:9000/acme  │    │
+#   │  └──────────────────┬──────────────────────────────┘    │
+#   └─────────────────────│────────────────────────────────────┘
+#                         │  (règle firewall OPNsense VLAN 40 → VLAN 10 :9000)
+#   ┌─────────────────────│────────────────────────────────────┐
+#   │  VLAN 40 - DMZ      │                                    │
+#   │  ┌──────────────────▼──────────────────────────────┐    │
+#   │  │  Traefik                                        │    │
+#   │  │  certificatesResolver: step-ca                  │    │
+#   │  │  → demande des certs à Step-CA via ACME         │    │
+#   │  └─────────────────────────────────────────────────┘    │
+#   └──────────────────────────────────────────────────────────┘
+#
+# HIÉRARCHIE PKI GÉNÉRÉE PAR STEP-CA :
+#
+#   Root CA (Yapserver Homelab Root CA)
+#     └── Intermediate CA (Yapserver Homelab Intermediate CA)
+#           └── Leaf certificates (service.int.yapserver.fr, etc.)
+#
+#   Le Root CA signe l'Intermediate CA (rarement utilisé directement).
+#   L'Intermediate CA émet les certificats du quotidien.
+#   Si l'Intermediate CA est compromise, on peut en générer un nouveau
+#   sans changer le Root CA ni reconfigurer tous les clients.
+#
+# NOTE IMPORTANTE :
+#   Ce service tourne sur une VM DÉDIÉE dans le VLAN 10 (Management).
+#   Il n'est PAS derrière Traefik (port direct 9000).
+#   Il n'a PAS besoin du réseau traefik-proxy.
+#   Les autres services le contactent directement par IP : 10.0.10.20:9000
+#
+# PRÉ-REQUIS :
+#   bash init.sh   (génère le mot de passe CA, crée les dossiers)
+# =============================================================================
+
+services:
+
+  step-ca:
+    image: smallstep/step-ca:${STEPCA_TAG}
+    container_name: step-ca
+    restart: unless-stopped
+
+    # -------------------------------------------------------------------------
+    # INITIALISATION AUTOMATIQUE (premier démarrage uniquement)
+    # -------------------------------------------------------------------------
+    # Les variables DOCKER_STEPCA_INIT_* sont lues UNE SEULE FOIS :
+    # quand /home/step/config/ca.json n'existe pas encore.
+    # Après le premier démarrage, ces variables sont IGNORÉES —
+    # Step-CA utilise la config persistée dans ./data/step/config/ca.json.
+    #
+    # CONSÉQUENCE : si vous changez ces variables après l'init,
+    # rien ne change. Pour modifier la config, utiliser la CLI step.
+    # -------------------------------------------------------------------------
+    environment:
+      # Nom affiché dans les certificats (champ "Issuer")
+      DOCKER_STEPCA_INIT_NAME: "${CA_NAME}"
+
+      # DNS/IPs sur lesquels Step-CA est joignable (pour son propre certificat TLS)
+      # Inclure : nom DNS interne, IP fixe du VLAN Management, localhost
+      DOCKER_STEPCA_INIT_DNS_NAMES: "${CA_DNS_NAMES}"
+
+      # Port d'écoute (exposé directement, pas via Traefik)
+      DOCKER_STEPCA_INIT_ADDRESS: ":9000"
+
+      # Email de l'admin du premier provisioner JWK
+      # (utilisé pour l'administration via CLI)
+      DOCKER_STEPCA_INIT_PROVISIONER_NAME: "${CA_ADMIN_EMAIL}"
+
+      # Active le provisioner ACME — c'est lui que Traefik utilisera
+      # ACME = même protocole que Let's Encrypt (RFC 8555)
+      DOCKER_STEPCA_INIT_ACME: "true"
+
+      # Fichier contenant le mot de passe de la clé CA
+      # Ce mot de passe chiffre la clé privée de l'Intermediate CA sur disque
+      DOCKER_STEPCA_INIT_PASSWORD_FILE: /run/secrets/ca-password
+
+      # Durée de validité par défaut des certificats émis (24h, renouvelés auto)
+      # Courte durée = si un cert est volé, il expire vite
+      # Traefik renouvelle automatiquement avant expiration
+      DOCKER_STEPCA_INIT_PROVISIONER_CLAIMS_MAX_TLS_CERT_DURATION: "2160h"    # 90 jours max
+      DOCKER_STEPCA_INIT_PROVISIONER_CLAIMS_DEFAULT_TLS_CERT_DURATION: "720h"  # 30 jours défaut
+
+    volumes:
+      # Données persistantes : clés CA, config, base de données des certs émis
+      # CRITIQUE : sauvegarder ce dossier régulièrement (Proxmox Backup Server)
+      # La perte de ce dossier = perte de toute la PKI
+      - ./data/step:/home/step
+
+      # Mot de passe de la clé CA — monté en lecture seule depuis secrets/
+      # NE JAMAIS mettre ce mot de passe dans une variable d'environnement Docker
+      # (visible via docker inspect). Le fichier monté est la bonne pratique.
+      - ./secrets/ca-password.txt:/run/secrets/ca-password:ro
+
+    ports:
+      # Port exposé directement sur l'hôte (VM VLAN 10)
+      # Accessible depuis les autres VMs via 10.0.10.20:9000
+      # La règle firewall OPNsense autorise VLAN 40 (Traefik) → VLAN 10 :9000
+      - "9000:9000"
+
+    networks:
+      - step-ca-net
+
+    healthcheck:
+      test: ["CMD", "step", "ca", "health", "--ca-url", "https://localhost:9000", "--root", "/home/step/certs/root_ca.crt"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+# =============================================================================
+# RÉSEAU
+# =============================================================================
+# Réseau interne dédié. Step-CA n'a pas besoin de traefik-proxy.
+# La communication avec Traefik se fait au niveau des VMs (VLAN routing),
+# pas au niveau des réseaux Docker.
+networks:
+  step-ca-net:
+    name: step-ca-net

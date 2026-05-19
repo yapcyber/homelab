@@ -1,0 +1,131 @@
+# =============================================================================
+# services/gaming/sunshine/docker-compose.yml
+# Phase 1.2 — Sunshine (Serveur de Cloud Gaming)
+# =============================================================================
+#
+# SUNSHINE vs MOONLIGHT — RÔLES DISTINCTS :
+#   Sunshine   → Serveur, installé sur le PC Gamer (ce fichier)
+#   Moonlight  → Client, installé sur les appareils de réception
+#                (téléphone, TV, laptop, tablette — aucune config côté homelab)
+#
+# CE SERVICE EST DIFFÉRENT DE TOUS LES AUTRES :
+#   ✗ Ne tourne PAS dans le cluster Proxmox
+#   ✗ N'est PAS sur une VM Debian
+#   ✓ Tourne DIRECTEMENT sur le PC Gamer (VLAN 90 — 10.0.90.20)
+#   ✓ Accède directement au GPU pour l'encodage matériel
+#
+# DEUX MODES D'INSTALLATION — choisir selon l'OS du PC Gamer :
+#
+#   MODE A — Windows (recommandé pour le gaming) :
+#     Télécharger l'installeur .exe sur https://github.com/LizardByte/Sunshine/releases
+#     Sunshine s'installe comme service Windows et démarre automatiquement.
+#     Config via interface web : https://localhost:47990
+#     → NE PAS utiliser ce docker-compose.yml
+#     → Utiliser directement config/sunshine.conf comme référence
+#
+#   MODE B — Linux + Docker (ce fichier) :
+#     Fonctionne avec KDE/GNOME (Wayland ou X11)
+#     Recommandé si le PC Gamer tourne sous Linux (Arch, Ubuntu, Pop!_OS...)
+#
+# ENCODAGE MATÉRIEL — CRITIQUE pour les performances :
+#   Sans GPU hardware encoding, le CPU encode la vidéo en temps réel.
+#   Sur un CPU moyen → 720p/60fps max, latence élevée, CPU à 100%.
+#   Avec GPU hardware encoding → 4K/120fps, CPU < 10%.
+#
+#   NVIDIA  : nvenc (le meilleur, très faible latence)
+#   Intel   : qsv / vaapi (bon rapport qualité/latence)
+#   AMD     : vaapi / amf (correct)
+#
+# PORTS SUNSHINE (à ouvrir dans OPNsense pour WireGuard → VLAN 90) :
+#   47984/tcp  → Setup HTTPS
+#   47989/tcp  → Setup HTTP
+#   47990/tcp  → Web UI HTTPS
+#   48010/tcp  → RTSP (négociation du stream)
+#   47998/udp  → Données vidéo (le plus important)
+#   47999/udp  → Contrôle (clavier, souris, manette)
+#   48000/udp  → Audio
+#   48002/udp  → Microphone (optionnel)
+#
+# ACCÈS DISTANT VIA WIREGUARD :
+#   Sur Moonlight → "Add PC manually" → IP WireGuard du PC Gamer (10.0.90.20)
+#   La latence WireGuard (~1-3ms) est imperceptible pour la plupart des jeux.
+#   Les FPS compétitifs (CS2, Valorant) peuvent nécessiter une connexion directe.
+# =============================================================================
+
+services:
+
+  sunshine:
+    image: ghcr.io/lizardbyte/sunshine:${SUNSHINE_TAG}
+    container_name: sunshine
+    restart: unless-stopped
+
+    # -------------------------------------------------------------------------
+    # RÉSEAU : host mode obligatoire pour Sunshine
+    # -------------------------------------------------------------------------
+    # Sunshine gère des flux UDP haute performance (vidéo, audio, contrôle).
+    # network_mode: host bypasse la couche réseau Docker pour accéder
+    # directement aux interfaces réseau de l'hôte.
+    # Cela élimine la latence de translation NAT Docker sur les flux UDP.
+    #
+    # CONSÉQUENCE : Sunshine n'est pas derrière Traefik.
+    # Le web UI (port 47990) est accessible directement :
+    # https://10.0.90.20:47990 (depuis le LAN ou WireGuard)
+    # Protégé par le mot de passe défini lors de la première configuration.
+    # -------------------------------------------------------------------------
+    network_mode: host
+
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+
+    volumes:
+      # Configuration Sunshine (sunshine.conf, credentials, app list)
+      - ./config:/config
+
+      # Accès au display X11 (pour capturer l'écran)
+      # Si Wayland : remplacer par /run/user/${PUID}/wayland-0 selon la distro
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+
+      # PulseAudio (audio du PC Gamer streamé vers Moonlight)
+      # Adapter le chemin selon l'UID de l'utilisateur courant
+      - /run/user/${PUID}/pulse:/tmp/pulse:ro
+
+    devices:
+      # -----------------------------------------------------------------
+      # ACCÈS GPU — Encodage matériel
+      # -----------------------------------------------------------------
+      # /dev/dri/card0          → GPU principal (rendu)
+      # /dev/dri/renderD128     → Interface d'encodage (VAAPI)
+      #
+      # NVIDIA : remplacer par --gpus all (ou device: /dev/nvidia0)
+      # Nécessite nvidia-container-toolkit sur le PC Gamer :
+      #   sudo apt install nvidia-container-toolkit
+      #   sudo nvidia-ctk runtime configure --runtime=docker
+      # -----------------------------------------------------------------
+      - /dev/dri:/dev/dri
+
+      # Manettes physiques branchées en USB sur le PC Gamer
+      # (pour les jouer à distance depuis Moonlight + manette sur l'appareil client)
+      - /dev/input:/dev/input
+
+    security_opt:
+      - seccomp=unconfined   # Nécessaire pour les opérations de capture d'écran
+
+    cap_add:
+      - SYS_ADMIN            # Pour certaines opérations de virtualisation d'écran
+
+    # Mémoire partagée avec le display server (optimise les performances de capture)
+    ipc: host
+
+    # Variables d'environnement pour X11
+    # Adapter le numéro de display selon la config du PC Gamer (:0, :1, etc.)
+    # Pour vérifier : echo $DISPLAY (sur le PC Gamer, en session graphique)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+# =============================================================================
+# NOTE : Pas de networks: défini
+# network_mode: host = Sunshine utilise directement le réseau du PC Gamer.
+# Le container voit la même interface réseau que l'hôte (10.0.90.20).
+# =============================================================================

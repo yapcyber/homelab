@@ -1,0 +1,28 @@
+# =============================================================================
+# generate-certs.yml — Génération des certificats TLS internes Wazuh
+# =============================================================================
+# À exécuter UNE SEULE FOIS avant le premier "docker compose up" :
+#   docker compose -f generate-certs.yml run --rm generator
+#
+# POURQUOI WAZUH A SES PROPRES CERTIFICATS ?
+#   La communication Manager ↔ Indexer passe par Filebeat (TLS mutual auth).
+#   L'Indexer ↔ Dashboard est aussi en TLS.
+#   Ces certificats sont DISTINCTS de ceux de Step-CA et de Let's Encrypt :
+#   ils sécurisent la communication INTERNE entre les composants Wazuh.
+#   Step-CA couvre le HTTPS exposé via Traefik (le Dashboard côté navigateur).
+#
+# RÉSULTAT : Certificats créés dans ./data/certs/
+#   root-ca.pem / root-ca-key.pem
+#   wazuh-indexer.pem / wazuh-indexer-key.pem
+#   wazuh-manager.pem / wazuh-manager-key.pem (aussi appelés root-ca-manager)
+#   wazuh-dashboard.pem / wazuh-dashboard-key.pem
+#   admin.pem / admin-key.pem (pour les opérations d'administration OpenSearch)
+# =============================================================================
+
+services:
+  generator:
+    image: wazuh/wazuh-certs-generator:0.0.2
+    container_name: wazuh-certs-generator
+    volumes:
+      - ./config/certs.yml:/config/certs.yml:ro
+      - ./data/certs/:/certificates/

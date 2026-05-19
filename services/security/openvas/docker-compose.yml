@@ -1,0 +1,359 @@
+# =============================================================================
+# services/security/openvas/docker-compose.yml
+# Phase 1.2 — OpenVAS / Greenbone Community Edition (GCE)
+# =============================================================================
+#
+# RÔLE : Scanner de vulnérabilités pour toute l'infrastructure.
+#   Scanne périodiquement toutes les IPs du homelab (~33 cibles identifiées)
+#   et génère des rapports de vulnérabilités classées par sévérité (CVE).
+#   Visible dans Dashboard → rapports cliquables avec remédiation suggérée.
+#
+# POURQUOI AUTANT DE SERVICES ?
+#   Greenbone sépare strictement les responsabilités :
+#
+#   ┌──────────────────────────────────────────────────────────────────┐
+#   │  gsa (Web UI)  ←→  gvmd (Manager/Orchestrateur)                 │
+#   │                          ↕                                        │
+#   │                    pg-gvm (PostgreSQL étendu)                    │
+#   │                          ↕                                        │
+#   │  ospd-openvas ←→ openvas-scanner (scan réseau actif)            │
+#   │       ↕                                                           │
+#   │  notus-scanner (checks locaux via MQTT)                          │
+#   │       ↕                                                           │
+#   │  mqtt-broker (bus de messages)                                   │
+#   └──────────────────────────────────────────────────────────────────┘
+#
+#   Chaque composant est mis à jour indépendamment.
+#   Les volumes de données (feeds CVE, NVTs) sont partagés entre services.
+#
+# FEEDS DE VULNÉRABILITÉS (téléchargés au premier démarrage) :
+#   vulnerability-tests : Scripts NASL de détection (~80 000 plugins, ~1 Go)
+#   notus-data          : Advisories Linux (packages vulnérables, ~200 Mo)
+#   scap-data           : CVE/CPE/OVAL database (~500 Mo)
+#   cert-bund-data      : Alertes CERT-Bund (allemand mais complet)
+#   dfn-cert-data       : Alertes DFN-CERT
+#   ⚠️  Premier démarrage : 30-60 minutes de synchronisation des feeds.
+#       Le scanner NE FONCTIONNE PAS avant la fin de la sync.
+#
+# SÉCURITÉ — Capacités Linux requises par le scanner :
+#   NET_ADMIN : nécessaire pour configurer les interfaces réseau pendant le scan
+#   NET_RAW   : nécessaire pour envoyer des paquets bruts (ICMP, TCP SYN, etc.)
+#   seccomp=unconfined : OpenVAS utilise des appels système low-level non standard
+#   Sans ces exceptions, le scanner détecte 0 vulnérabilités (silencieusement).
+#
+# ACCÈS RÉSEAU DU SCANNER :
+#   Le scanner scanne depuis la VM VLAN 50 (SOC) vers toutes les autres VMs.
+#   Règle OPNsense requise en Phase 2 :
+#   Source: 10.0.50.0/24 → Destination: 10.0.0.0/8 → Action: Allow (scan)
+#
+# PRÉ-REQUIS :
+#   cp .env.example .env && remplir les valeurs
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # DONNÉES — Volumes de feeds CVE (containers jetables, données persistantes)
+  # ===========================================================================
+  # Ces containers ne "tournent" pas en permanence — ils peuplent des volumes
+  # Docker partagés avec les autres services. Ils peuvent être redémarrés
+  # pour re-synchroniser les feeds depuis Greenbone.
+
+  # NVT (Network Vulnerability Tests) — 80 000+ scripts de détection NASL
+  vulnerability-tests:
+    image: greenbone/vulnerability-tests:${GCE_TAG}
+    container_name: gce-vulnerability-tests
+    environment:
+      STORAGE_PATH: /var/lib/openvas/22.04/vt-data/nasl
+    volumes:
+      - vt_data_vol:/mnt
+
+  # Advisories Notus — vérification rapide des paquets Linux vulnérables
+  notus-data:
+    image: greenbone/notus-data:${GCE_TAG}
+    container_name: gce-notus-data
+    volumes:
+      - notus_data_vol:/mnt
+
+  # SCAP Data — NVD CVEs, CPE dictionary, OVAL definitions
+  scap-data:
+    image: greenbone/scap-data:${GCE_TAG}
+    container_name: gce-scap-data
+    volumes:
+      - scap_data_vol:/mnt
+
+  # CERT data — Alertes sécurité CERT-Bund et DFN-CERT
+  cert-bund-data:
+    image: greenbone/cert-bund-data:${GCE_TAG}
+    container_name: gce-cert-bund-data
+    volumes:
+      - cert_data_vol:/mnt
+
+  dfn-cert-data:
+    image: greenbone/dfn-cert-data:${GCE_TAG}
+    container_name: gce-dfn-cert-data
+    volumes:
+      - cert_data_vol:/mnt
+    depends_on:
+      - cert-bund-data
+
+  # Objets de données (scan configs, port lists, report formats)
+  data-objects:
+    image: greenbone/data-objects:${GCE_TAG}
+    container_name: gce-data-objects
+    volumes:
+      - data_objects_vol:/mnt
+
+  report-formats:
+    image: greenbone/report-formats:${GCE_TAG}
+    container_name: gce-report-formats
+    volumes:
+      - data_objects_vol:/mnt
+    depends_on:
+      - data-objects
+
+  # Clés GPG pour vérifier l'authenticité des feeds Greenbone
+  gpg-data:
+    image: greenbone/gpg-data:${GCE_TAG}
+    container_name: gce-gpg-data
+    volumes:
+      - gpg_data_vol:/mnt
+
+  # ===========================================================================
+  # MQTT BROKER — Bus de messages entre notus-scanner et ospd-openvas
+  # ===========================================================================
+  # Greenbone utilise MQTT pour que notus-scanner publie les résultats
+  # de checks locaux vers ospd-openvas. Léger, requis pour Notus.
+  mqtt-broker:
+    image: greenbone/mqtt-broker:latest
+    container_name: gce-mqtt-broker
+    restart: on-failure
+
+  # ===========================================================================
+  # REDIS — Communication entre openvas-scanner et ospd-openvas
+  # ===========================================================================
+  # Stocke temporairement les résultats des scans avant traitement par gvmd.
+  # Unix socket partagé via volume (plus performant que TCP).
+  redis-server:
+    image: greenbone/redis-server:latest
+    container_name: gce-redis
+    restart: on-failure
+    volumes:
+      - redis_socket_vol:/run/redis/
+
+  # ===========================================================================
+  # PG-GVM — PostgreSQL avec extensions GVM
+  # ===========================================================================
+  # Stocke : résultats de scans, rapports, hosts découverts, tâches planifiées.
+  # Utilise l'image pg-gvm (PostgreSQL standard + extensions spécifiques GVM).
+  # ⚠️  NE PAS remplacer par postgres:alpine — migrations incompatibles.
+  pg-gvm:
+    image: greenbone/pg-gvm:${GCE_TAG}
+    container_name: gce-postgres
+    restart: on-failure
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - psql_data_vol:/var/lib/postgresql
+      - psql_socket_vol:/var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gvmd"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ===========================================================================
+  # GVMD — Greenbone Vulnerability Manager Daemon
+  # ===========================================================================
+  # Cerveau de l'application : orchestre les scans, stocke les résultats,
+  # gère les utilisateurs, les tâches planifiées et les rapports.
+  # Communique avec ospd-openvas via Unix socket pour lancer les scans.
+  gvmd:
+    image: greenbone/gvmd:${GCE_TAG}
+    container_name: gce-gvmd
+    restart: on-failure
+    volumes:
+      - gvmd_data_vol:/var/lib/gvm
+      - scap_data_vol:/var/lib/gvm/scap-data/
+      - cert_data_vol:/var/lib/gvm/cert-data
+      - data_objects_vol:/var/lib/gvm/data-objects/gvmd
+      - vt_data_vol:/var/lib/openvas/plugins
+      - psql_data_vol:/var/lib/postgresql
+      - psql_socket_vol:/var/run/postgresql
+      - gvmd_socket_vol:/run/gvmd
+      - ospd_socket_vol:/run/ospd
+      - notus_data_vol:/notus
+      - gpg_data_vol:/etc/openvas/gnupg
+    depends_on:
+      pg-gvm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "gvmd --get-users > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s   # gvmd attend la fin de la sync des feeds
+
+  # ===========================================================================
+  # OSPd-OPENVAS — Daemon de l'Open Scanner Protocol
+  # ===========================================================================
+  # Interface entre gvmd et openvas-scanner.
+  # Traduit les ordres GMP (Greenbone Management Protocol) de gvmd
+  # en appels vers le scanner OpenVAS.
+  #
+  # ⚠️  CAPABILITIES LINUX OBLIGATOIRES pour le scan réseau :
+  #   NET_ADMIN → modifie les interfaces réseau pendant le scan
+  #   NET_RAW   → envoie des paquets IP bruts (SYN scan, ICMP, etc.)
+  # ⚠️  seccomp=unconfined → OpenVAS utilise des syscalls non standards
+  #   Sans ces exceptions : le scanner tourne mais détecte 0 vulnérabilité.
+  ospd-openvas:
+    image: greenbone/ospd-openvas:${GCE_TAG}
+    container_name: gce-ospd-openvas
+    restart: on-failure
+    init: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    command:
+      [
+        "ospd-openvas",
+        "-f",
+        "--config", "/etc/gvm/ospd-openvas.conf",
+        "--notus-feed-dir", "/notus",
+        "-m", "666"
+      ]
+    volumes:
+      - vt_data_vol:/var/lib/openvas/plugins
+      - notus_data_vol:/notus
+      - ospd_socket_vol:/run/ospd
+      - redis_socket_vol:/run/redis/
+    depends_on:
+      - redis-server
+
+  # ===========================================================================
+  # OPENVAS SCANNER — Moteur de scan réseau
+  # ===========================================================================
+  # Exécute les scripts NASL (Nessus Attack Scripting Language) contre les cibles.
+  # Envoie les résultats vers ospd-openvas via Redis.
+  # C'est lui qui fait les connexions réseau vers les machines scannées.
+  openvas:
+    image: greenbone/openvas-scanner:${GCE_TAG}
+    container_name: gce-openvas-scanner
+    restart: on-failure
+    volumes:
+      - vt_data_vol:/var/lib/openvas/plugins
+      - notus_data_vol:/notus
+      - gpg_data_vol:/etc/openvas/gnupg
+    environment:
+      OPENVAS_GNUPG_HOME: /etc/openvas/gnupg
+    depends_on:
+      - ospd-openvas
+      - gpg-data
+
+  # ===========================================================================
+  # NOTUS SCANNER — Vérification rapide des paquets vulnérables
+  # ===========================================================================
+  # Contrairement à openvas-scanner (scan réseau actif),
+  # notus-scanner vérifie les packages installés sur les agents Wazuh
+  # (via MQTT) sans générer de trafic réseau. Plus rapide, moins intrusif.
+  notus-scanner:
+    image: greenbone/notus-scanner:${GCE_TAG}
+    container_name: gce-notus-scanner
+    restart: on-failure
+    volumes:
+      - notus_data_vol:/notus
+      - redis_socket_vol:/run/redis/
+    environment:
+      NOTUS_SCANNER_MQTT_HOST: mqtt-broker
+      NOTUS_SCANNER_DISABLE_HASHSUM_VERIFICATION: "False"
+    depends_on:
+      - mqtt-broker
+      - notus-data
+
+  # ===========================================================================
+  # GSA — Greenbone Security Assistant (Interface Web)
+  # ===========================================================================
+  # Interface web pour configurer et lancer les scans, consulter les rapports.
+  # C'est le seul service exposé via Traefik.
+  # Tous les autres restent sur le réseau Docker interne (default network).
+  gsa:
+    image: greenbone/gsa:${GCE_TAG}
+    container_name: gce-gsa
+    restart: on-failure
+    volumes:
+      - gvmd_socket_vol:/run/gvmd
+    depends_on:
+      gvmd:
+        condition: service_healthy
+    networks:
+      - default          # Réseau interne Docker Compose (communication avec gvmd)
+      - traefik-proxy    # Réseau Traefik (exposition web)
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+      - "traefik.http.routers.openvas.rule=Host(`openvas.${DOMAIN}`)"
+      - "traefik.http.routers.openvas.entrypoints=websecure"
+      - "traefik.http.routers.openvas.tls.certresolver=step-ca"
+      # Scanner de vulnérabilités = service ultra-sensible
+      # Accès interne uniquement + SSO Authentik
+      - "traefik.http.routers.openvas.middlewares=authentik@file,internal-only@file,rate-limit@file"
+      - "traefik.http.services.openvas.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+# =============================================================================
+# VOLUMES NOMMÉS — Données persistantes et partagées entre services
+# =============================================================================
+# Les volumes Docker nommés sont préférés aux bind mounts ici car :
+#   - Les feeds sont partagés entre PLUSIEURS containers simultanément
+#   - Les données sont gérées par Docker (performances I/O optimisées)
+#   - Les bind mounts multi-containers peuvent avoir des problèmes de permissions
+#
+# Pour sauvegarder les données importantes (résultats de scans) :
+#   docker run --rm -v gce_psql_data_vol:/data -v $(pwd):/backup \
+#     ubuntu tar czf /backup/openvas-pg-backup.tar.gz /data
+volumes:
+  psql_data_vol:
+    name: gce_psql_data_vol
+  psql_socket_vol:
+    name: gce_psql_socket_vol
+  gvmd_data_vol:
+    name: gce_gvmd_data_vol
+  scap_data_vol:
+    name: gce_scap_data_vol
+  cert_data_vol:
+    name: gce_cert_data_vol
+  data_objects_vol:
+    name: gce_data_objects_vol
+  vt_data_vol:
+    name: gce_vt_data_vol
+  notus_data_vol:
+    name: gce_notus_data_vol
+  redis_socket_vol:
+    name: gce_redis_socket_vol
+  ospd_socket_vol:
+    name: gce_ospd_socket_vol
+  gpg_data_vol:
+    name: gce_gpg_data_vol
+
+# =============================================================================
+# RÉSEAUX
+# =============================================================================
+networks:
+  # default : réseau interne Docker Compose (communication entre les services GCE)
+  # Créé automatiquement par Docker Compose sous le nom "openvas_default"
+  default:
+    name: openvas-internal
+
+  # Réseau Traefik — uniquement pour le container gsa (web UI)
+  traefik-proxy:
+    external: true
+    name: traefik-proxy

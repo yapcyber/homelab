@@ -1,0 +1,253 @@
+# =============================================================================
+# services/infra/netbox/docker-compose.yml
+# Phase 1.2 — Netbox (Documentation Infrastructure & IPAM)
+# =============================================================================
+#
+# RÔLE DE NETBOX DANS CE HOMELAB :
+#   Source de vérité de toute l'infrastructure réseau.
+#   Documente : VLANs, sous-réseaux, IPs assignées, équipements physiques,
+#               câblage, VMs, fournisseurs, garanties, configs.
+#
+#   IPAM (IP Address Management) : savoir exactement quelle IP est assignée
+#   à quel équipement, éviter les conflits, planifier les extensions.
+#
+#   Valeur portfolio : Netbox est l'outil de référence dans les équipes réseau
+#   et infrastructure en entreprise (Netflix, DigitalOcean l'ont créé pour eux).
+#   Savoir le déployer et l'utiliser est une compétence directement valorisable.
+#
+# ARCHITECTURE (même pattern qu'Authentik) :
+#
+#   ┌─────────────────────────────────────────────────────┐
+#   │  Réseau : traefik-proxy                             │
+#   │   ┌─────────────┐                                   │
+#   │   │   netbox    │ ◄── Traefik HTTPS                 │
+#   │   │  (Django)   │                                   │
+#   │   └──────┬──────┘                                   │
+#   └──────────│──────────────────────────────────────────┘
+#              │
+#   ┌──────────│──────────────────────────────────────────┐
+#   │  Réseau : netbox-internal (isolé)                    │
+#   │   ┌──────┴──────┐  ┌──────────┐  ┌──────────────┐  │
+#   │   │netbox-worker│  │ postgres │  │    redis     │  │
+#   │   │  (RQ jobs)  │  │ (données)│  │ (cache+queue)│  │
+#   │   └─────────────┘  └──────────┘  └──────────────┘  │
+#   └─────────────────────────────────────────────────────┘
+#
+# PRÉ-REQUIS :
+#   cp .env.example .env && remplir les valeurs
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # POSTGRESQL
+  # ===========================================================================
+  netbox-postgres:
+    image: postgres:16-alpine
+    container_name: netbox-postgres
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: ${NETBOX_DB_NAME}
+      POSTGRES_USER: ${NETBOX_DB_USER}
+      POSTGRES_PASSWORD: ${NETBOX_DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - netbox-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${NETBOX_DB_NAME} -U ${NETBOX_DB_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+
+  # ===========================================================================
+  # REDIS — Cache ET file de tâches (deux bases différentes, même instance)
+  # ===========================================================================
+  # Netbox utilise Redis de deux façons :
+  #   DB 0 (REDIS_DATABASE=0) : Cache des vues Django (performances)
+  #   DB 1 (REDIS_CACHE_DATABASE=1) : File de tâches Redis Queue (jobs asynchrones)
+  # Une seule instance Redis suffit grâce aux databases Redis (0-15).
+  netbox-redis:
+    image: redis:7-alpine
+    container_name: netbox-redis
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: --requirepass ${NETBOX_REDIS_PASSWORD}
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - netbox-internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${NETBOX_REDIS_PASSWORD} ping | grep -q PONG"]
+      start_period: 10s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+
+  # ===========================================================================
+  # NETBOX — Application principale (Django + Gunicorn)
+  # ===========================================================================
+  netbox:
+    image: netboxcommunity/netbox:${NETBOX_TAG}
+    container_name: netbox
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      # --- Base de données ---
+      DB_HOST: netbox-postgres
+      DB_PORT: "5432"
+      DB_NAME: ${NETBOX_DB_NAME}
+      DB_USER: ${NETBOX_DB_USER}
+      DB_PASSWORD: ${NETBOX_DB_PASSWORD}
+
+      # --- Redis (cache) ---
+      REDIS_HOST: netbox-redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${NETBOX_REDIS_PASSWORD}
+      REDIS_DATABASE: "0"
+      REDIS_SSL: "false"
+
+      # --- Redis (tasks) — même instance, database différente ---
+      REDIS_CACHE_HOST: netbox-redis
+      REDIS_CACHE_PORT: "6379"
+      REDIS_CACHE_PASSWORD: ${NETBOX_REDIS_PASSWORD}
+      REDIS_CACHE_DATABASE: "1"
+      REDIS_CACHE_SSL: "false"
+
+      # --- Clé secrète Django ---
+      # Utilisée pour les sessions, CSRF tokens, et le chiffrement.
+      # Générer avec : python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+      # Ne JAMAIS changer après initialisation (invalide toutes les sessions).
+      SECRET_KEY: ${NETBOX_SECRET_KEY}
+
+      # --- Accès et localisation ---
+      # Seul ce hostname est autorisé à accéder à Netbox (protection CSRF)
+      ALLOWED_HOSTS: "netbox.${DOMAIN} localhost"
+      TIME_ZONE: ${TZ}
+      LANGUAGE_CODE: "fr-fr"
+
+      # --- Comportement ---
+      # Requiert une authentification pour TOUTES les vues (pas de lecture anonyme)
+      # Pour un homelab privé, cette option est fortement recommandée
+      LOGIN_REQUIRED: "true"
+      # Durée de session : 86400s = 24h (après inactivité)
+      LOGIN_TIMEOUT: "86400"
+
+      # --- Compte superadmin initial ---
+      # Créé automatiquement si SUPERUSER_NAME n'existe pas en base.
+      # Ignorer après la première connexion réussie.
+      SUPERUSER_NAME: ${NETBOX_SUPERUSER_NAME}
+      SUPERUSER_EMAIL: ${NETBOX_SUPERUSER_EMAIL}
+      SUPERUSER_PASSWORD: ${NETBOX_SUPERUSER_PASSWORD}
+      # Token API pour les intégrations futures (Ansible, scripts, etc.)
+      SUPERUSER_API_TOKEN: ${NETBOX_SUPERUSER_API_TOKEN}
+
+      # --- Métriques (activer en Phase 5 avec Prometheus) ---
+      METRICS_ENABLED: "false"
+
+    volumes:
+      - ./data/media:/opt/netbox/netbox/media    # Fichiers uploadés (images équipements)
+      - ./data/reports:/opt/netbox/netbox/reports # Reports personnalisés
+      - ./data/scripts:/opt/netbox/netbox/scripts # Scripts d'automatisation
+      - /etc/localtime:/etc/localtime:ro
+
+    networks:
+      - traefik-proxy
+      - netbox-internal
+
+    depends_on:
+      netbox-postgres:
+        condition: service_healthy
+      netbox-redis:
+        condition: service_healthy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+
+      # Service purement interne → certificat Step-CA (pas Cloudflare)
+      - "traefik.http.routers.netbox.rule=Host(`netbox.${DOMAIN}`)"
+      - "traefik.http.routers.netbox.entrypoints=websecure"
+      - "traefik.http.routers.netbox.tls.certresolver=step-ca"
+
+      # Double protection : réseau interne + SSO Authentik
+      - "traefik.http.routers.netbox.middlewares=authentik@file,internal-only@file,rate-limit@file"
+
+      - "traefik.http.services.netbox.loadbalancer.server.port=8080"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/ > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s  # Django + migrations = démarrage lent au premier run
+
+  # ===========================================================================
+  # NETBOX WORKER — Tâches asynchrones (Redis Queue)
+  # ===========================================================================
+  # Exécute les jobs en arrière-plan :
+  #   - Webhooks (notifications vers d'autres services quand les données changent)
+  #   - Scripts de synchronisation
+  #   - Rapports planifiés
+  #   - Import/export de données volumineuses
+  #
+  # Utilise la même image que netbox, avec la commande worker RQ.
+  # N'est PAS exposé via Traefik.
+  netbox-worker:
+    image: netboxcommunity/netbox:${NETBOX_TAG}
+    container_name: netbox-worker
+    restart: unless-stopped
+    command: /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      # Mêmes variables que netbox (partagent la même config)
+      DB_HOST: netbox-postgres
+      DB_PORT: "5432"
+      DB_NAME: ${NETBOX_DB_NAME}
+      DB_USER: ${NETBOX_DB_USER}
+      DB_PASSWORD: ${NETBOX_DB_PASSWORD}
+      REDIS_HOST: netbox-redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${NETBOX_REDIS_PASSWORD}
+      REDIS_DATABASE: "0"
+      REDIS_CACHE_HOST: netbox-redis
+      REDIS_CACHE_PORT: "6379"
+      REDIS_CACHE_PASSWORD: ${NETBOX_REDIS_PASSWORD}
+      REDIS_CACHE_DATABASE: "1"
+      SECRET_KEY: ${NETBOX_SECRET_KEY}
+      ALLOWED_HOSTS: "netbox.${DOMAIN} localhost"
+      TIME_ZONE: ${TZ}
+
+    volumes:
+      - ./data/media:/opt/netbox/netbox/media
+      - ./data/reports:/opt/netbox/netbox/reports
+      - ./data/scripts:/opt/netbox/netbox/scripts
+      - /etc/localtime:/etc/localtime:ro
+
+    networks:
+      - netbox-internal  # Pas de traefik-proxy : aucun trafic entrant direct
+
+    depends_on:
+      netbox:
+        condition: service_healthy
+
+# =============================================================================
+# RÉSEAUX
+# =============================================================================
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy
+
+  netbox-internal:
+    internal: true
+    name: netbox-internal

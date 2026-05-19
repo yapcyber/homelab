@@ -1,0 +1,73 @@
+# =============================================================================
+# config/wazuh_indexer/internal_users.yml
+# Utilisateurs internes OpenSearch (Wazuh Indexer)
+# =============================================================================
+# Ce fichier définit les utilisateurs internes du moteur de recherche OpenSearch.
+# LES MOTS DE PASSE SONT DES HASHES BCRYPT — pas les mots de passe en clair.
+#
+# Génération d'un hash bcrypt (sur Ubuntu) :
+#   sudo apt install apache2-utils
+#   htpasswd -bnBC 12 "" VOTRE_MOT_DE_PASSE | tr -d ':\n'
+#
+# OU via Docker :
+#   docker run --rm wazuh/wazuh-indexer:4.9.0 bash -c \
+#     "plugins/opensearch-security/tools/hash.sh -p VOTRE_MOT_DE_PASSE"
+#
+# UTILISATEURS REQUIS PAR WAZUH :
+#   admin          → Wazuh Manager (Filebeat) et Dashboard
+#   kibanaserver   → Dashboard → Indexer (communication interne)
+#   kibanaro       → Lecture seule (pour les rapports)
+#
+# PROCÉDURE POUR CHANGER LES MOTS DE PASSE (Phase 4) :
+#   1. Générer le hash du nouveau mot de passe
+#   2. Remplacer le hash ici
+#   3. Mettre à jour les variables correspondantes dans .env
+#   4. docker compose up -d (le Manager/Dashboard liront les nouvelles valeurs)
+# =============================================================================
+
+---
+
+# Compte admin principal — utilisé par le Manager (Filebeat) et le Dashboard
+# REMPLACER le hash par le hash du mot de passe défini dans WAZUH_INDEXER_PASSWORD
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+admin:
+  hash: "$2y$12$K/SpwjtB.wOHJ/Nc6GVpDOzoci6PaVzCr54HEEWFa3IiTdB9BWKL2"  # CHANGEME — voir procédure ci-dessus
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Wazuh admin user"
+
+kibanaserver:
+  hash: "$2y$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrX2MyPMsDDe"  # CHANGEME
+  reserved: true
+  description: "Wazuh dashboard user"
+
+kibanaro:
+  hash: "$2y$12$JJSXNfTowz7Uu5ttXfeYpeYE0arACvcwleFAuqhJl72HJUcSQFMQ"  # CHANGEME
+  reserved: false
+  backend_roles:
+    - "kibanauser"
+  description: "Wazuh read-only user"
+
+logstash:
+  hash: "$2y$12$u1ShR4l4uBS3Uv59K3GxE.luf5K0cegpL0WG0/cxwbfv.49jSIvEm"  # CHANGEME
+  reserved: false
+  backend_roles:
+    - "logstash"
+
+filebeat:
+  hash: "$2y$12$CVZnoa/Me3.GP0gRpcPh1.VP64YCigVC/IVqpnHqVkqn.7RpV7SLm"  # CHANGEME
+  reserved: false
+  backend_roles:
+    - "all_access"
+
+# Utilisateur Wazuh Dashboard → API Manager
+wazuh-wui:
+  hash: "$2y$12$OSFqFDgrFYQCuMPivMYp5.TT3FKfKNh.PNMUuEzm4Dy.b4HQ2HVHK"  # CHANGEME
+  reserved: false
+  backend_roles:
+    - "wazuh"
+  description: "Wazuh dashboard → Manager API user"

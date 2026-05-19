@@ -1,0 +1,203 @@
+# =============================================================================
+# services/cloud/nextcloud/docker-compose.yml
+# Phase 1.2 — Nextcloud (Cloud personnel)
+# =============================================================================
+#
+# RÔLE : Alternative self-hosted à Google Drive / OneDrive.
+#   Fichiers, contacts, calendriers, notes, partage de liens.
+#   Accessible depuis l'extérieur (famille, mobile, desktop via app native).
+#
+# ARCHITECTURE :
+#
+#   ┌─────────────────────────────────────────────┐
+#   │  traefik-proxy                              │
+#   │   ┌──────────────────────────────────┐      │
+#   │   │  nextcloud (Apache + PHP)        │◄─────┤── HTTPS depuis internet
+#   │   │  nextcloud-cron (tâches fond)    │      │
+#   │   └───────────────┬──────────────────┘      │
+#   └───────────────────│─────────────────────────┘
+#                       │
+#   ┌───────────────────│─────────────────────────┐
+#   │  nextcloud-internal (interne, isolé)         │
+#   │   ┌───────────────┴──────┐  ┌────────────┐  │
+#   │   │  nextcloud-postgres  │  │   redis    │  │
+#   │   └──────────────────────┘  └────────────┘  │
+#   └─────────────────────────────────────────────┘
+#
+# POINT CRITIQUE — Nextcloud derrière un reverse proxy :
+#   Sans les variables OVERWRITE*, Nextcloud génère des URLs en http://
+#   qui cassent les clients desktop/mobile et tous les partages de liens.
+#   Les variables TRUSTED_PROXIES sont nécessaires pour que Nextcloud
+#   fasse confiance aux headers X-Forwarded-* envoyés par Traefik.
+# =============================================================================
+
+services:
+
+  nextcloud-postgres:
+    image: postgres:16-alpine
+    container_name: nextcloud-postgres
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - nextcloud-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${NEXTCLOUD_DB_NAME} -U ${NEXTCLOUD_DB_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+
+  # Redis — double rôle :
+  #   File locking → sérialise les accès concurrents au même fichier (évite la corruption)
+  #   Session cache → stocke les sessions PHP (plus rapide que le filesystem)
+  nextcloud-redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: --requirepass ${NEXTCLOUD_REDIS_PASSWORD}
+    networks:
+      - nextcloud-internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${NEXTCLOUD_REDIS_PASSWORD} ping | grep -q PONG"]
+      start_period: 10s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+
+  nextcloud:
+    image: nextcloud:${NEXTCLOUD_TAG}
+    container_name: nextcloud
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: nextcloud-postgres
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      REDIS_HOST: nextcloud-redis
+      REDIS_HOST_PASSWORD: ${NEXTCLOUD_REDIS_PASSWORD}
+
+      # Compte admin initial (premier démarrage uniquement, ignoré ensuite)
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+
+      # Hostnames autorisés (protection DNS rebinding)
+      NEXTCLOUD_TRUSTED_DOMAINS: "nextcloud.${DOMAIN} localhost"
+
+      # -----------------------------------------------------------------------
+      # Configuration reverse proxy — NE PAS OMETTRE
+      # -----------------------------------------------------------------------
+      # Sans ces 4 variables, les URLs générées par Nextcloud utilisent http://
+      # → clients desktop/mobile déconnectés, partages cassés, CalDAV/CardDAV KO
+      OVERWRITEPROTOCOL: https
+      OVERWRITEHOST: "nextcloud.${DOMAIN}"
+      OVERWRITECLIURL: "https://nextcloud.${DOMAIN}"
+      # 172.16.0.0/12 = toutes les adresses Docker bridge possibles
+      # 10.0.0.0/8    = ton réseau interne (WireGuard clients inclus)
+      NEXTCLOUD_TRUSTED_PROXIES: "172.16.0.0/12 10.0.0.0/8"
+      APACHE_DISABLE_REWRITE_IP: "1"
+      # -----------------------------------------------------------------------
+
+      TZ: ${TZ}
+
+      # Email (optionnel)
+      SMTP_HOST: ${NEXTCLOUD_SMTP_HOST:-""}
+      SMTP_SECURE: ${NEXTCLOUD_SMTP_SECURE:-""}
+      SMTP_PORT: ${NEXTCLOUD_SMTP_PORT:-"587"}
+      SMTP_NAME: ${NEXTCLOUD_SMTP_USER:-""}
+      SMTP_PASSWORD: ${NEXTCLOUD_SMTP_PASSWORD:-""}
+      MAIL_FROM_ADDRESS: ${NEXTCLOUD_MAIL_FROM:-"nextcloud"}
+      MAIL_DOMAIN: ${DOMAIN}
+
+    volumes:
+      - ./data/nextcloud:/var/www/html
+      - /etc/localtime:/etc/localtime:ro
+      # Phase 4 — monter le NAS (VLAN 60) pour les données utilisateurs :
+      # - type: nfs
+      #   source: 10.0.60.20:/nextcloud-data
+      #   target: /var/www/html/data
+
+    networks:
+      - traefik-proxy
+      - nextcloud-internal
+
+    depends_on:
+      nextcloud-postgres:
+        condition: service_healthy
+      nextcloud-redis:
+        condition: service_healthy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+
+      # Cloudflare (Let's Encrypt) — service accessible depuis internet
+      - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.${DOMAIN}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=cloudflare"
+
+      # PAS de internal-only (famille depuis l'extérieur)
+      # PAS de authentik (Nextcloud a sa propre auth + 2FA natif)
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-caldav@docker,rate-limit@file"
+
+      # Redirection CalDAV/CardDAV
+      # Les clients agenda (iOS, Thunderbird) cherchent les endpoints sur .well-known/*
+      # Nextcloud les expose sur /remote.php/dav — cette règle fait la redirection.
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=https://(.*)/.well-known/(?:card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$${1}/remote.php/dav"
+
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/status.php | grep -q '\"installed\":true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ===========================================================================
+  # NEXTCLOUD CRON — Tâches de fond (toutes les 5 minutes)
+  # ===========================================================================
+  # Même image, mêmes volumes, entrypoint différent (/cron.sh).
+  # Gère : notifications, nettoyage, indexation, partages expirés.
+  # Sans lui → avertissements permanents dans l'admin Nextcloud.
+  # Pas de port exposé, pas de labels Traefik.
+  nextcloud-cron:
+    image: nextcloud:${NEXTCLOUD_TAG}
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    environment:
+      POSTGRES_HOST: nextcloud-postgres
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      REDIS_HOST: nextcloud-redis
+      REDIS_HOST_PASSWORD: ${NEXTCLOUD_REDIS_PASSWORD}
+      NEXTCLOUD_TRUSTED_PROXIES: "172.16.0.0/12 10.0.0.0/8"
+    volumes:
+      - ./data/nextcloud:/var/www/html
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - nextcloud-internal
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy
+  nextcloud-internal:
+    internal: true
+    name: nextcloud-internal

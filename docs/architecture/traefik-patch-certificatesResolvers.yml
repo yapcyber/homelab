@@ -1,0 +1,60 @@
+# =============================================================================
+# PATCH pour services/infra/traefik/config/traefik.yml
+# =============================================================================
+# QUAND APPLIQUER : Phase 4, après que Step-CA soit opérationnel
+#                  et que root_ca.crt soit monté dans le container Traefik.
+#
+# COMMENT : Remplacer le bloc certificatesResolvers dans traefik.yml
+#           par le contenu ci-dessous (cloudflare + step-ca).
+# =============================================================================
+
+certificatesResolvers:
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare — Let's Encrypt via DNS Challenge
+  # ---------------------------------------------------------------------------
+  # USAGE : Services exposés publiquement (portfolio, etc.)
+  #   Label : traefik.http.routers.SERVICE.tls.certresolver=cloudflare
+  # ---------------------------------------------------------------------------
+  cloudflare:
+    acme:
+      email: "${CF_API_EMAIL}"
+      storage: /data/acme-cloudflare.json
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+        delayBeforeCheck: "60s"
+
+  # ---------------------------------------------------------------------------
+  # Step-CA — PKI interne via ACME (TLS-ALPN-01 Challenge)
+  # ---------------------------------------------------------------------------
+  # USAGE : Services internes uniquement (Proxmox, Netbox, Wazuh, etc.)
+  #   Label : traefik.http.routers.SERVICE.tls.certresolver=step-ca
+  #
+  # PRÉ-REQUIS :
+  #   1. root_ca.crt monté dans le container Traefik (voir commentaire volumes)
+  #   2. Step-CA opérationnel et joignable sur 10.0.10.20:9000
+  #   3. Règle firewall OPNsense : VLAN 40 (DMZ) → VLAN 10 (Mgmt) port 9000
+  #
+  # COMMENT ÇA MARCHE (TLS-ALPN-01) :
+  #   1. Traefik demande un cert à Step-CA pour service.int.yapserver.fr
+  #   2. Step-CA envoie un challenge TLS-ALPN-01
+  #   3. Traefik répond sur son port 443 avec un certificat spécial de challenge
+  #   4. Step-CA vérifie → émet le certificat
+  #   Avantage : pas besoin d'ouvrir de port supplémentaire, pas de DNS externe.
+  # ---------------------------------------------------------------------------
+  step-ca:
+    acme:
+      email: "${CA_ADMIN_EMAIL}"
+      storage: /data/acme-internal.json
+      caServer: "https://step-ca.int.yapserver.fr:9000/acme/acme/directory"
+      # Le Root CA de Step-CA doit être dans le trust store du container Traefik
+      # Ajouter dans docker-compose.yml (volumes Traefik) :
+      #   - ./data/homelab-root-ca.crt:/etc/ssl/certs/homelab-root-ca.crt:ro
+      tlsChallenge: {}
+      # Durée de cache des certificats avant renouvellement automatique
+      # Step-CA émet des certs de 30j par défaut → Traefik renouvelle à J-15
+      certificatesDuration: 720h

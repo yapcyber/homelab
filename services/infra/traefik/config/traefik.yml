@@ -1,0 +1,204 @@
+# =============================================================================
+# config/traefik.yml — Configuration STATIQUE Traefik v3
+# =============================================================================
+# DISTINCTION CONFIG STATIQUE / DYNAMIQUE :
+#
+#   Statique (ce fichier) → Nécessite un redémarrage de Traefik pour s'appliquer.
+#                           Définit la structure : ports, providers, plugins, logs.
+#
+#   Dynamique (dynamic/) → Rechargée À CHAUD sans interruption de service.
+#                           Définit le contenu : middlewares, TLS, routes statiques.
+# =============================================================================
+
+global:
+  checkNewVersion: false     # Désactive le check de MAJ (vie privée + pas de résolution DNS inutile)
+  sendAnonymousUsage: false  # Désactive la télémétrie
+
+# API interne et Dashboard
+# Le dashboard est accessible uniquement via le router 'traefik-dashboard'
+# défini dans docker-compose.yml avec les middlewares d'authentification
+api:
+  dashboard: true
+  debug: false
+  insecure: false   # CRITIQUE : false = le dashboard n'est PAS accessible sur :8080 en clair
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+# Logs structurés en JSON = compatibles avec Wazuh (Phase 5) et Loki/Grafana.
+# Ne pas mettre level: DEBUG en production (performances + taille des logs).
+
+log:
+  level: INFO
+  format: json
+  filePath: /logs/traefik.log
+
+# Logs d'accès = chaque requête HTTP loggée → source principale pour CrowdSec
+accessLog:
+  filePath: /logs/access.log
+  format: json
+  # On ne logue que les erreurs pour réduire le volume.
+  # CrowdSec analyse ces erreurs pour détecter les scans, brute force, etc.
+  filters:
+    statusCodes:
+      - "400-599"
+  # Champs inclus dans chaque ligne de log (utilisés par les parsers CrowdSec)
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop   # Ne pas logguer les mots de passe BasicAuth
+    headers:
+      defaultMode: drop
+      names:
+        User-Agent: keep
+        Referer: keep
+
+# =============================================================================
+# ENTRYPOINTS — Ports d'écoute
+# =============================================================================
+entryPoints:
+
+  # ---------------------------------------------------------------------------
+  # web (port 80) — HTTP uniquement, redirige vers HTTPS
+  # ---------------------------------------------------------------------------
+  # Il n'y a AUCUNE exception : tout le trafic HTTP est redirigé.
+  # Cela évite les fuites d'informations en clair et force TLS partout.
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true   # Code HTTP 301 (permanent, mis en cache par les navigateurs)
+
+  # ---------------------------------------------------------------------------
+  # websecure (port 443) — HTTPS, entrypoint principal
+  # ---------------------------------------------------------------------------
+  # Les middlewares définis ici sont appliqués GLOBALEMENT à toutes les routes.
+  # security-headers et crowdsec-bouncer sont donc actifs sur chaque service,
+  # sans avoir à les spécifier route par route.
+  websecure:
+    address: ":443"
+    http:
+      middlewares:
+        - security-headers@file   # En-têtes de sécurité HTTP sur toutes les réponses
+        - crowdsec-bouncer@file   # Vérification CrowdSec sur chaque requête entrante
+    # trustedIPs : IPs dont les headers X-Forwarded-For sont de confiance.
+    # Nécessaire pour récupérer la vraie IP cliente derrière Cloudflare.
+    # Sans ça, CrowdSec verrait toujours l'IP Cloudflare, pas l'attaquant.
+    forwardedHeaders:
+      trustedIPs:
+        # Plages IP officielles Cloudflare (https://www.cloudflare.com/ips/)
+        - "173.245.48.0/20"
+        - "103.21.244.0/22"
+        - "103.22.200.0/22"
+        - "103.31.4.0/22"
+        - "141.101.64.0/18"
+        - "108.162.192.0/18"
+        - "190.93.240.0/20"
+        - "188.114.96.0/20"
+        - "197.234.240.0/22"
+        - "198.41.128.0/17"
+        - "162.158.0.0/15"
+        - "104.16.0.0/13"
+        - "104.24.0.0/14"
+        - "172.64.0.0/13"
+        - "131.0.72.0/22"
+        # Réseau interne + WireGuard
+        - "10.0.0.0/8"
+
+# =============================================================================
+# PROVIDERS — Sources de configuration des routes
+# =============================================================================
+providers:
+
+  # ---------------------------------------------------------------------------
+  # Provider Docker
+  # ---------------------------------------------------------------------------
+  # Traefik surveille le socket Docker et lit les labels des containers.
+  # Quand un container démarre avec traefik.enable=true, Traefik crée
+  # automatiquement la route correspondante. Quand le container s'arrête,
+  # la route disparaît. Zéro rechargement manuel.
+  docker:
+    exposedByDefault: false  # ← SÉCURITÉ FONDAMENTALE
+                              # Sans ce paramètre, TOUS les containers seraient
+                              # exposés automatiquement sur internet.
+                              # Avec false, un service doit explicitement déclarer
+                              # traefik.enable=true pour être routé.
+    network: traefik-proxy    # Réseau Docker sur lequel Traefik contacte les services
+    watch: true               # Détection automatique des nouveaux containers
+
+  # ---------------------------------------------------------------------------
+  # Provider Fichier
+  # ---------------------------------------------------------------------------
+  # Lecture des fichiers YAML dans /etc/traefik/dynamic/ (monté en volume).
+  # watch: true = rechargement à chaud dès qu'un fichier est modifié.
+  # Utilisé pour : middlewares, options TLS, routes vers services non-Docker.
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# =============================================================================
+# PLUGIN CROWDSEC BOUNCER
+# =============================================================================
+# Le plugin est téléchargé depuis GitHub au démarrage de Traefik.
+# Il s'intègre directement dans le pipeline de traitement des requêtes.
+# FONCTIONNEMENT :
+#   1. Requête entrante → Plugin interroge l'API CrowdSec locale
+#   2. CrowdSec répond : "IP connue malveillante" ou "IP OK"
+#   3. Si malveillante → Traefik retourne 403 sans transmettre au service
+#   4. Les décisions sont mises en cache (mode stream) pour les performances
+experimental:
+  plugins:
+    crowdsec-bouncer:
+      moduleName: "github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      version: "v1.3.5"
+
+# =============================================================================
+# RÉSOLVEUR DE CERTIFICATS — Let's Encrypt via Cloudflare DNS Challenge
+# =============================================================================
+# POURQUOI DNS CHALLENGE et pas HTTP Challenge ?
+#
+# HTTP Challenge : Let's Encrypt vérifie la propriété du domaine en accédant
+#   à http://votredomaine.fr/.well-known/acme-challenge/...
+#   → Nécessite que le serveur soit joignable depuis internet (impossible pour
+#     les services purement internes comme traefik.int.yapserver.fr)
+#
+# DNS Challenge : Let's Encrypt demande la création d'un enregistrement TXT
+#   _acme-challenge.votredomaine.fr via l'API Cloudflare.
+#   → Fonctionne même pour des services jamais exposés sur internet.
+#   → Permet les certificats wildcard (*.yapserver.fr)
+#   → Nécessite uniquement un token API Cloudflare, pas d'exposition de port.
+#
+# AVANTAGE MAJEUR pour ce homelab : un seul wildcard *.yapserver.fr couvre
+# TOUS les sous-domaines (Proxmox, Traefik, Nextcloud, etc.) sans générer
+# un certificat individuel pour chaque service.
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: "${CF_API_EMAIL}"
+      storage: /data/acme-cloudflare.json
+      # Serveur de production Let's Encrypt
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      # POUR LES TESTS — décommenter pour éviter les rate limits Let's Encrypt
+      # (max 5 certificats/domaine/semaine en production)
+      # caServer: "https://acme-staging-v02.api.letsencrypt.org/directory"
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"   # DNS Cloudflare (propagation immédiate pour CF)
+          - "8.8.8.8:53"   # Fallback DNS Google
+        delayBeforeCheck: "60s"  # Attente propagation DNS avant validation
+
+# Métriques Prometheus — activées en Phase 5 avec le stack monitoring
+# metrics:
+#   prometheus:
+#     addEntryPointsLabels: true
+#     addServicesLabels: true
+#     addRoutersLabels: true
+#     buckets:
+#       - 0.1
+#       - 0.3
+#       - 1.2
+#       - 5.0

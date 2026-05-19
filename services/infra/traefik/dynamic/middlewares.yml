@@ -1,0 +1,168 @@
+# =============================================================================
+# dynamic/middlewares.yml — Middlewares Traefik
+# =============================================================================
+# Un middleware est une transformation appliquée à la requête ou à la réponse
+# AVANT qu'elle n'atteigne le service cible (ou avant d'être renvoyée au client).
+#
+# RÉFÉRENCEMENT dans les labels Docker d'un service :
+#   - "traefik.http.routers.monservice.middlewares=authentik@file,rate-limit@file"
+#
+# Convention de nommage : nomMiddleware@file (pour les middlewares de ce fichier)
+#                         nomMiddleware@docker (pour les middlewares définis en labels)
+#
+# CE FICHIER EST RECHARGÉ À CHAUD — pas besoin de redémarrer Traefik.
+# =============================================================================
+
+http:
+  middlewares:
+
+    # =========================================================================
+    # CROWDSEC BOUNCER — Blocage WAF collaboratif en temps réel
+    # =========================================================================
+    # Appliqué globalement via l'entrypoint websecure (voir traefik.yml).
+    # Chaque requête entrante est vérifiée contre la base de décisions CrowdSec.
+    #
+    # Mode "stream" : CrowdSec pousse les décisions à Traefik en temps réel.
+    # Le bouncer maintient un cache local → impact minimal sur les performances
+    # (pas d'appel réseau pour chaque requête).
+    #
+    # ⚠️  CROWDSEC_BOUNCER_API_KEY : générer après le premier démarrage CrowdSec :
+    #   docker exec crowdsec cscli bouncers add traefik-bouncer
+    #   Copier la clé dans le .env, puis redémarrer Traefik.
+    # =========================================================================
+    crowdsec-bouncer:
+      plugin:
+        crowdsec-bouncer:
+          crowdsecLapiScheme: http
+          crowdsecLapiHost: crowdsec:8080
+          crowdsecLapiKey: "${CROWDSEC_BOUNCER_API_KEY}"
+          crowdsecMode: stream
+          updateIntervalSeconds: 60    # Fréquence de sync des décisions
+          defaultDecisionSeconds: 60   # Durée de blocage si LAPI injoignable
+          httpTimeoutSeconds: 10
+
+    # =========================================================================
+    # SECURITY HEADERS — En-têtes de sécurité HTTP
+    # =========================================================================
+    # Ces en-têtes instruisent le NAVIGATEUR sur les règles de sécurité.
+    # Ils ne remplacent pas la sécurité applicative, mais ajoutent une couche
+    # de protection côté client contre des classes d'attaques spécifiques.
+    #
+    # HSTS (Strict-Transport-Security) :
+    #   Force le navigateur à n'utiliser que HTTPS pour ce domaine pendant
+    #   stsSeconds secondes, même si l'utilisateur tape http://.
+    #   Après preload : le domaine est intégré dans les navigateurs à la compilation.
+    #
+    # X-Frame-Options (SAMEORIGIN) :
+    #   Empêche l'intégration de tes services dans des iframes d'autres domaines.
+    #   Protection contre le clickjacking (superposition invisible de boutons).
+    #
+    # X-Content-Type-Options (nosniff) :
+    #   Empêche le navigateur de deviner le type MIME d'un fichier.
+    #   Evite qu'un fichier texte soit exécuté comme JavaScript.
+    # =========================================================================
+    security-headers:
+      headers:
+        sslRedirect: true
+        forceSTSHeader: true
+        stsSeconds: 31536000           # HSTS : 1 an (365 jours)
+        stsIncludeSubdomains: true     # HSTS s'applique aussi aux sous-domaines
+        stsPreload: true               # Éligibilité au preload list des navigateurs
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=()"
+        customFrameOptionsValue: "SAMEORIGIN"
+        customResponseHeaders:
+          X-Forwarded-Proto: "https"
+          # Désactiver l'indexation par les moteurs pour les services non-portfolio
+          # Retirer ce header sur le service portfolio (on veut qu'il soit indexé)
+          X-Robots-Tag: "noindex, nofollow"
+
+    # =========================================================================
+    # RATE LIMITING — Protection brute force et DDoS applicatif
+    # =========================================================================
+    # Limite le nombre de requêtes par IP par unité de temps.
+    # CrowdSec gère le blocage long terme des IPs abusives.
+    # Le rate limiting gère les pics immédiats avant que CrowdSec ne réagisse.
+    # Ces deux couches sont complémentaires.
+    rate-limit:
+      rateLimit:
+        average: 100   # 100 req/minute en moyenne par IP
+        burst: 50      # Tolérance pic : 50 requêtes supplémentaires instantanées
+        period: 1m
+
+    # =========================================================================
+    # AUTHENTIK FORWARD AUTH — SSO sur tous les services
+    # =========================================================================
+    # Traefik intercepte la requête et la transmet à Authentik AVANT le service.
+    # Authentik vérifie la session de l'utilisateur :
+    #   - Pas authentifié → redirection vers la page de login Authentik
+    #   - Authentifié     → transmission au service + headers X-authentik-*
+    #
+    # USAGE : Ajouter "authentik@file" dans les middlewares d'un router.
+    # NE PAS appliquer globalement — certains services ont leur propre auth
+    # (Jellyfin, Nextcloud) ou doivent rester accessibles sans login (portfolio).
+    #
+    # Les headers X-authentik-* permettent aux services de récupérer l'identité
+    # de l'utilisateur authentifié sans gérer eux-mêmes l'authentification.
+    # =========================================================================
+    authentik:
+      forwardAuth:
+        address: "http://authentik-server:9000/outpost.goauthentik.io/auth/traefik"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-authentik-username
+          - X-authentik-groups
+          - X-authentik-email
+          - X-authentik-name
+          - X-authentik-uid
+
+    # =========================================================================
+    # BASIC AUTH — Dashboard Traefik uniquement
+    # =========================================================================
+    # ⚠️  Ne pas utiliser BasicAuth pour les services applicatifs → utiliser Authentik.
+    # BasicAuth est acceptable pour le dashboard Traefik car :
+    #   1. Il est protégé par le middleware internal-only (réseau interne uniquement)
+    #   2. Le trafic est chiffré HTTPS (le mot de passe ne circule pas en clair)
+    #
+    # Générer le hash du mot de passe (sur Ubuntu) :
+    #   sudo apt install apache2-utils
+    #   htpasswd -nb admin VOTRE_MOT_DE_PASSE | sed -e 's/\$/\$\$/g'
+    # =========================================================================
+    traefik-auth:
+      basicAuth:
+        users:
+          - "${TRAEFIK_DASHBOARD_USER}:${TRAEFIK_DASHBOARD_HASH}"
+        removeHeader: true   # Ne pas transmettre l'en-tête Authorization au service
+
+    # =========================================================================
+    # IP ALLOWLIST — Restriction au réseau interne
+    # =========================================================================
+    # Services avec ce middleware = INACCESSIBLES depuis internet.
+    # Même avec un nom DNS public, la requête est bloquée si elle ne vient pas
+    # de 10.0.0.0/8 ou du tunnel WireGuard.
+    #
+    # Appliquer sur : dashboard Traefik, Proxmox, Netbox, Homarr,
+    #                 Wazuh UI, Step-CA, et tout service d'administration.
+    # Ne pas appliquer sur : portfolio, services familiaux (Jellyfin, Nextcloud)
+    # =========================================================================
+    internal-only:
+      ipAllowList:
+        sourceRange:
+          - "10.0.0.0/8"       # Tous les VLANs internes
+          - "10.0.200.0/24"    # Clients WireGuard VPN
+          - "127.0.0.1/32"     # Loopback
+
+    # =========================================================================
+    # COMPRESSION — Optimisation bande passante
+    # =========================================================================
+    compress:
+      compress:
+        minResponseBodyBytes: 1024   # Compresser seulement si réponse > 1 Ko
+        excludedContentTypes:
+          - "image/jpeg"
+          - "image/png"
+          - "image/gif"
+          - "image/webp"
+          - "video/*"   # Les médias sont déjà compressés — inutile de recompresser

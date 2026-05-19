@@ -1,0 +1,31 @@
+# =============================================================================
+# config/certs.yml — Nœuds pour la génération des certificats Wazuh
+# =============================================================================
+# Ce fichier définit les noms DNS et IPs de chaque composant Wazuh.
+# Les certificats générés seront valides pour ces noms/IPs.
+#
+# RÈGLE : Le nom doit correspondre EXACTEMENT aux hostnames Docker
+#         définis dans docker-compose.yml (hostname: wazuh-*)
+# =============================================================================
+
+nodes:
+  # Wazuh Indexer (OpenSearch) — stockage des événements
+  indexer:
+    - name: wazuh-indexer
+      ip:
+        - wazuh-indexer        # Nom DNS Docker interne
+        - "10.0.50.10"         # IP fixe de la VM SOC (VLAN 50) — adapter si différent
+
+  # Wazuh Manager — analyse et corrélation des logs
+  server:
+    - name: wazuh-manager
+      ip:
+        - wazuh-manager
+        - "10.0.50.10"
+
+  # Wazuh Dashboard — interface web
+  dashboard:
+    - name: wazuh-dashboard
+      ip:
+        - wazuh-dashboard
+        - "10.0.50.10"

@@ -1,0 +1,267 @@
+# =============================================================================
+# services/infra/authentik/docker-compose.yml
+# Phase 1.2 — Stack Authentik (IdP / SSO)
+# =============================================================================
+#
+# ARCHITECTURE DE LA STACK :
+#
+#   ┌─────────────────────────────────────────────────────┐
+#   │  Réseau : traefik-proxy (externe)                   │
+#   │   ┌─────────────────┐                               │
+#   │   │ authentik-server │ ◄── Traefik (HTTPS)          │
+#   │   │   port 9000      │ ◄── Forward Auth (services)  │
+#   │   └────────┬────────┘                               │
+#   └────────────│────────────────────────────────────────┘
+#                │
+#   ┌────────────│────────────────────────────────────────┐
+#   │  Réseau : authentik-internal (interne, isolé)        │
+#   │   ┌────────┴────────┐  ┌──────────────────────┐    │
+#   │   │ authentik-worker │  │ authentik-postgresql  │    │
+#   │   │ (tâches async)   │  │ (données persistantes)│    │
+#   │   └─────────────────┘  └──────────────────────┘    │
+#   │                         ┌──────────────────────┐    │
+#   │                         │ authentik-redis       │    │
+#   │                         │ (cache + file d'att.) │    │
+#   │                         └──────────────────────┘    │
+#   └─────────────────────────────────────────────────────┘
+#
+# POURQUOI internal: true sur authentik-internal ?
+#   Les containers sur un réseau "internal" n'ont pas de passerelle par défaut
+#   vers internet. PostgreSQL et Redis ne peuvent donc pas initier de connexions
+#   sortantes. Si un attaquant compromise la base de données, il est isolé réseau.
+#
+# PRÉ-REQUIS :
+#   - Stack Traefik lancée (réseau traefik-proxy existant)
+#   - cp .env.example .env && remplir les valeurs
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # POSTGRESQL — Base de données persistante
+  # ===========================================================================
+  # Stocke les utilisateurs, groupes, politiques, sessions, tokens, etc.
+  # Seuls authentik-server et authentik-worker peuvent lui parler
+  # (réseau authentik-internal, jamais exposé à l'extérieur).
+  # ===========================================================================
+  authentik-postgresql:
+    image: postgres:16-alpine
+    container_name: authentik-postgresql
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: ${AUTHENTIK_POSTGRESQL__USER}
+      POSTGRES_PASSWORD: ${AUTHENTIK_POSTGRESQL__PASSWORD}
+      POSTGRES_DB: ${AUTHENTIK_POSTGRESQL__NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata   # Sous-dossier pour éviter les conflits
+    volumes:
+      - ./data/postgresql:/var/lib/postgresql/data
+    networks:
+      - authentik-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${AUTHENTIK_POSTGRESQL__NAME} -U ${AUTHENTIK_POSTGRESQL__USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+
+  # ===========================================================================
+  # REDIS — Cache et file de tâches
+  # ===========================================================================
+  # Double rôle :
+  #   1. Cache des sessions et tokens (vitesse d'authentification)
+  #   2. File de tâches asynchrones pour le worker (emails, LDAP sync, etc.)
+  #
+  # Redis est configuré avec un mot de passe (--requirepass).
+  # Sans mot de passe, n'importe quel container sur le même réseau Docker
+  # pourrait vider le cache ou injecter des tâches malveillantes.
+  # ===========================================================================
+  authentik-redis:
+    image: redis:7-alpine
+    container_name: authentik-redis
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: --requirepass ${AUTHENTIK_REDIS__PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - authentik-internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${AUTHENTIK_REDIS__PASSWORD} ping | grep -q PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+
+  # ===========================================================================
+  # AUTHENTIK SERVER — Serveur applicatif principal
+  # ===========================================================================
+  # Responsable de :
+  #   - Interface web (login, admin UI sur /if/admin/)
+  #   - API REST
+  #   - Forward auth (port 9000, utilisé par Traefik pour le SSO)
+  #   - Outpost embarqué (gère les sessions Traefik)
+  #
+  # C'est LE container qui répond aux requêtes Traefik.
+  # Il est sur DEUX réseaux :
+  #   - traefik-proxy : pour être joignable par Traefik
+  #   - authentik-internal : pour joindre PostgreSQL et Redis
+  # ===========================================================================
+  authentik-server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    container_name: authentik-server
+    command: server
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # --- Connexions aux services internes ---
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS__PASSWORD}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_POSTGRESQL__USER}
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRESQL__NAME}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRESQL__PASSWORD}
+
+      # --- Clé secrète (NE JAMAIS CHANGER après le premier démarrage) ---
+      # Utilisée pour signer les tokens, chiffrer les secrets stockés en DB.
+      # Un changement invalide TOUTES les sessions et tokens existants.
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+
+      # --- Domaine des cookies SSO ---
+      # Le point initial (.yapserver.fr) permet au cookie de fonctionner
+      # sur TOUS les sous-domaines. C'est ce qui rend le SSO transparent :
+      # authentifié sur auth.yapserver.fr → accès direct à nextcloud.yapserver.fr
+      AUTHENTIK_COOKIE_DOMAIN: ${AUTHENTIK_COOKIE_DOMAIN}
+
+      # --- Confidentialité et mises à jour ---
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"   # Pas d'envoi de rapports d'erreurs
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "false"        # Garder les alertes de MAJ
+
+      # --- Logging ---
+      AUTHENTIK_LOG_LEVEL: info
+
+      # --- Email / SMTP (optionnel mais recommandé) ---
+      # Nécessaire pour : reset de mot de passe, invitations, alertes MFA
+      AUTHENTIK_EMAIL__HOST: ${AUTHENTIK_EMAIL__HOST:-localhost}
+      AUTHENTIK_EMAIL__PORT: ${AUTHENTIK_EMAIL__PORT:-587}
+      AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL__USERNAME:-""}
+      AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL__PASSWORD:-""}
+      AUTHENTIK_EMAIL__USE_TLS: ${AUTHENTIK_EMAIL__USE_TLS:-false}
+      AUTHENTIK_EMAIL__USE_SSL: ${AUTHENTIK_EMAIL__USE_SSL:-false}
+      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM:-authentik@yapserver.fr}
+
+      # --- Bootstrap admin (premier démarrage uniquement) ---
+      # Ces variables créent le compte admin initial.
+      # Elles sont IGNORÉES si le compte existe déjà.
+      # Les supprimer du .env après le premier login est une bonne pratique.
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+
+    volumes:
+      - ./data/media:/media               # Avatars, branding personnalisé
+      - ./data/custom-templates:/templates # Templates email/page personnalisés
+
+    networks:
+      - traefik-proxy
+      - authentik-internal
+
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"  # Traefik doit router sur CE réseau
+
+      # --- Interface web Authentik ---
+      # Accessible publiquement pour que les utilisateurs puissent se logger
+      # depuis internet ou depuis le VPN WireGuard.
+      # PAS de middleware authentik ici (boucle infinie : auth → auth → auth)
+      # PAS de middleware internal-only (les users doivent y accéder de partout)
+      - "traefik.http.routers.authentik.rule=Host(`auth.${DOMAIN}`)"
+      - "traefik.http.routers.authentik.entrypoints=websecure"
+      - "traefik.http.routers.authentik.tls.certresolver=cloudflare"
+      - "traefik.http.routers.authentik.middlewares=rate-limit@file"
+      - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # Authentik prend du temps à démarrer (migrations DB)
+
+  # ===========================================================================
+  # AUTHENTIK WORKER — Processeur de tâches asynchrones
+  # ===========================================================================
+  # Exécute les tâches en arrière-plan via la file Redis :
+  #   - Envoi d'emails (reset MDP, invitations)
+  #   - Synchronisation LDAP (si configuré)
+  #   - Nettoyage des sessions expirées
+  #   - Rapports et alertes
+  #   - Mise à jour de la Community Blocklist GeoIP
+  #
+  # Il utilise la MÊME image que le server, avec command: worker.
+  # Il n'est PAS sur traefik-proxy (pas de trafic entrant direct).
+  # ===========================================================================
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    container_name: authentik-worker
+    command: worker
+    restart: unless-stopped
+    # user: root est requis par certaines tâches de maintenance système.
+    # Dans notre contexte, le worker n'est pas exposé sur internet
+    # et est isolé sur le réseau authentik-internal.
+    user: root
+    environment:
+      # Mêmes variables que le server (partagent la même config)
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS__PASSWORD}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_POSTGRESQL__USER}
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRESQL__NAME}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRESQL__PASSWORD}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_COOKIE_DOMAIN: ${AUTHENTIK_COOKIE_DOMAIN}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_LOG_LEVEL: info
+      AUTHENTIK_EMAIL__HOST: ${AUTHENTIK_EMAIL__HOST:-localhost}
+      AUTHENTIK_EMAIL__PORT: ${AUTHENTIK_EMAIL__PORT:-587}
+      AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL__USERNAME:-""}
+      AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL__PASSWORD:-""}
+      AUTHENTIK_EMAIL__USE_TLS: ${AUTHENTIK_EMAIL__USE_TLS:-false}
+      AUTHENTIK_EMAIL__USE_SSL: ${AUTHENTIK_EMAIL__USE_SSL:-false}
+      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM:-authentik@yapserver.fr}
+
+    volumes:
+      - ./data/media:/media
+      - ./data/custom-templates:/templates
+
+    networks:
+      - authentik-internal   # Pas de traefik-proxy : le worker n'a aucun trafic entrant
+
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+
+# =============================================================================
+# RÉSEAUX
+# =============================================================================
+networks:
+  # Réseau partagé avec Traefik (external = créé hors de cette stack)
+  traefik-proxy:
+    external: true
+    name: traefik-proxy
+
+  # Réseau interne isolé — PostgreSQL et Redis ne peuvent pas sortir sur internet
+  # internal: true supprime la passerelle par défaut de ces containers
+  authentik-internal:
+    internal: true
+    name: authentik-internal
