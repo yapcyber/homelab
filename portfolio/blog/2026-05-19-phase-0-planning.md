@@ -30,11 +30,11 @@ The backbone of this homelab runs at **10 Gbps** between the firewall, the switc
 |-----------|---------|------|
 | Firewall | Gaming PC (repurposed) + Mellanox SFP+ | OPNsense — WAN 10G + LAN 10G |
 | Switch | Cisco WS-C3560X + C3KX-NM-10G module | L3, 10 VLANs, SPAN port |
-| Node 1 | Mini PC 1 — 32 GB RAM | Proxmox VE |
-| Node 2 | Mini PC 2 — 16 GB RAM | Proxmox VE |
-| Node 3 | Mini PC 3 — 32 GB RAM | Proxmox VE |
-| SOC | Mini PC 4 — SPAN port | Security Onion |
-| Gaming | Dedicated PC + Mellanox SFP+ | Sunshine cloud gaming |
+| Node 1 | Mini PC 1 | Proxmox VE |
+| Node 2 | Mini PC 2 | Proxmox VE |
+| Node 3 | Mini PC 3 | Proxmox VE |
+| SOC | Mini PC 4 | Security Onion |
+| Gaming | PC Gaming + Mellanox SFP+ | Sunshine cloud gaming |
 
 ## Network segmentation: 10 VLANs
 

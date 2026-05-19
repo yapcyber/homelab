@@ -36,12 +36,12 @@ This is not a "spin up a Raspberry Pi" tutorial. It's an infrastructure project 
 |-----------|---------|-------|------|
 | **Firewall** | PC Parefeu | Mellanox ConnectX SFP+ 10G dual-port | OPNsense — WAN 10G + LAN 10G |
 | **Switch** | Cisco WS-C3560X-24P-S | + C3KX-NM-10G (2× SFP+ 10G) | L3, 10 VLANs, SPAN, inter-VLAN routing |
-| **Node 1** | Mini PC 1 | 32 GB RAM, x86_64 | Proxmox VE |
-| **Node 2** | Mini PC 2 | 16 GB RAM, x86_64 | Proxmox VE |
-| **Node 3** | Mini PC 3 | 32 GB RAM, M.2 2.5G NIC | Proxmox VE |
+| **Node 1** | Mini PC 1 |  | Proxmox VE |
+| **Node 2** | Mini PC 2 |  | Proxmox VE |
+| **Node 3** | Mini PC 3 |  | Proxmox VE |
 | **SOC** | Mini PC 4 | 1G admin + 1G SPAN | Security Onion (bare metal) |
 | **Gaming** | Gaming PC | Mellanox SFP+ 10G | Sunshine cloud gaming |
-| **Jump Host** | Mini PC 5 | 32 GB RAM | Ubuntu 24.04 LTS — Admin |
+| **Jump Host** | Laptop |  | Ubuntu 24.04 LTS — Admin |
 
 ---
 
