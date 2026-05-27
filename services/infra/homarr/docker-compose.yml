@@ -1,86 +1,23 @@
-# =============================================================================
-# services/infra/homarr/docker-compose.yml
-# Phase 1.2 — Homarr (Dashboard centralisé)
-# =============================================================================
-#
-# RÔLE DE HOMARR DANS CE HOMELAB :
-#   Page d'accueil unique accessible depuis le réseau interne (ou WireGuard).
-#   Centralise les liens vers tous les services, affiche l'état des containers,
-#   les stats système, la météo, etc.
-#   C'est le "cockpit" du homelab — première chose qu'on ouvre en arrivant.
-#
-# SÉCURITÉ :
-#   - Middleware internal-only  → inaccessible depuis internet
-#   - Middleware authentik      → SSO, seuls les utilisateurs Authentik autorisés
-#   - Docker socket en lecture seule → affiche l'état des containers sans pouvoir
-#     les contrôler (principe du moindre privilège)
-#
-# SIMPLICITÉ :
-#   Container unique, configuration 100% via l'interface web.
-#   Aucun fichier de config à écrire — Homarr stocke tout dans ./data/configs.
-# =============================================================================
-
 services:
-
   homarr:
-    image: ghcr.io/ajnart/homarr:${HOMARR_TAG}
+    image: ghcr.io/homarr-labs/homarr:latest
     container_name: homarr
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-
     environment:
-      TZ: ${TZ}
-      # URL publique de Homarr — utilisée par NextAuth pour les callbacks OAuth
-      # Doit correspondre exactement à l'URL Traefik configurée dans les labels
-      NEXTAUTH_URL: "https://home.${DOMAIN}"
-      # Clé secrète pour la signature des cookies de session Homarr
-      # Différente de la clé Authentik — couche de sécurité supplémentaire
-      NEXTAUTH_SECRET: ${HOMARR_NEXTAUTH_SECRET}
-      # Désactive la page de login intégrée Homarr (Authentik gère l'auth via Traefik)
-      # Note : garder AUTH_PROVIDER vide = Homarr garde sa propre auth en backup
-      # Si tu veux désactiver totalement la page de login Homarr : AUTH_PROVIDER=oidc
-      # et configurer le provider OIDC dans Authentik (Phase 4)
-
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY}
     volumes:
-      # Configuration du dashboard (widgets, disposition, liens)
-      # Sauvegarder ce dossier pour restaurer la config sans tout reconfigurer
       - ./data/configs:/app/data/configs
-
-      # Icônes personnalisées pour les services
       - ./data/icons:/app/public/icons
-
-      # Socket Docker en LECTURE SEULE
-      # Permet au widget "Docker" d'afficher l'état (running/stopped) des containers
-      # Sans ce mount, le widget Docker ne fonctionnera pas
-      # Sécurité : :ro = Homarr NE PEUT PAS démarrer/arrêter des containers
       - /var/run/docker.sock:/var/run/docker.sock:ro
-
-      - /etc/localtime:/etc/localtime:ro
-
     networks:
       - traefik-proxy
-
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=traefik-proxy"
-
-      # Certificat Step-CA (service interne uniquement)
-      - "traefik.http.routers.homarr.rule=Host(`home.${DOMAIN}`)"
+      - "traefik.http.routers.homarr.rule=Host(`home.yapserver.fr`)"
       - "traefik.http.routers.homarr.entrypoints=websecure"
-      - "traefik.http.routers.homarr.tls.certresolver=step-ca"
-
-      # Double protection : réseau interne ET SSO Authentik
-      - "traefik.http.routers.homarr.middlewares=authentik@file,internal-only@file,rate-limit@file"
-
+      - "traefik.http.routers.homarr.tls.certresolver=cloudflare"
+      - "traefik.http.routers.homarr.middlewares=internal-only@file,rate-limit@file"
       - "traefik.http.services.homarr.loadbalancer.server.port=7575"
-
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7575"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
 networks:
   traefik-proxy:
