@@ -1,0 +1,22 @@
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      - DOMAIN=https://vault.yapserver.fr
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - SIGNUPS_ALLOWED=true
+      - WEBSOCKET_ENABLED=true
+      - LOG_LEVEL=warn
+    volumes:
+      - ./data:/data
+    ports:
+      - "80:80"
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy
