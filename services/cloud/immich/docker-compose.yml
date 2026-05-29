@@ -1,229 +1,87 @@
-# =============================================================================
-# services/cloud/immich/docker-compose.yml
-# Phase 1.2 — Immich (Gestion photos/vidéos — alternative Google Photos)
-# =============================================================================
 #
-# RÔLE : Alternative self-hosted à Google Photos / iCloud Photos.
-#   Upload automatique depuis iPhone/Android, reconnaissance de visages,
-#   albums intelligents, recherche par contenu ("chats", "vacances 2024"),
-#   timeline, partage familial.
+# WARNING: To install Immich, follow our guide: https://docs.immich.app/install/docker-compose
 #
-# POURQUOI IMMICH ET PAS JUSTE NEXTCLOUD POUR LES PHOTOS ?
-#   Nextcloud peut gérer des photos, mais Immich est conçu UNIQUEMENT pour ça.
-#   Il offre : transcoding vidéo natif, ML pour reconnaissance faciale/objets,
-#   recherche sémantique ("trouve mes photos de plage"), interface mobile native
-#   très rapide, et des performances bien supérieures sur de grandes bibliothèques.
+# Make sure to use the docker-compose.yml of the current release:
 #
-# ⚠️  DÉVELOPPEMENT ACTIF — Immich change vite.
-#   Toujours vérifier le CHANGELOG avant de mettre à jour :
-#   https://github.com/immich-app/immich/releases
-#   Ne JAMAIS utiliser "latest" — toujours pinner IMMICH_VERSION.
+# https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml
 #
-# ARCHITECTURE :
-#
-#   ┌─────────────────────────────────────────────────┐
-#   │  traefik-proxy                                  │
-#   │   ┌────────────────────────────────────────┐    │
-#   │   │  immich-server                         │◄───┤── HTTPS internet
-#   │   └───────────────────┬────────────────────┘    │
-#   └───────────────────────│────────────────────────┘
-#                           │
-#   ┌───────────────────────│────────────────────────┐
-#   │  immich-internal                               │
-#   │   ┌───────────────────┴──┐  ┌───────────────┐  │
-#   │   │  immich-machine-     │  │  immich-redis │  │
-#   │   │  learning (IA/ML)    │  └───────────────┘  │
-#   │   └──────────────────────┘  ┌───────────────┐  │
-#   │                             │immich-postgres│  │
-#   │                             │(pgvecto.rs)   │  │
-#   │                             └───────────────┘  │
-#   └────────────────────────────────────────────────┘
-#
-# POSTGRESQL SPÉCIAL — tensorchord/pgvecto-rs :
-#   Immich utilise pgvecto.rs, une EXTENSION PostgreSQL pour les vecteurs.
-#   Les vecteurs stockent les "embeddings" IA (représentation mathématique
-#   d'une photo) qui permettent la recherche sémantique.
-#   → On NE PEUT PAS utiliser un PostgreSQL standard.
-#   → Chaque version Immich est liée à une version précise de pgvecto-rs.
-#     Vérifier la compatibilité dans le CHANGELOG avant de mettre à jour.
-# =============================================================================
+# The compose file on main may not be compatible with the latest release.
+
+name: immich
 
 services:
-
-  # ===========================================================================
-  # POSTGRESQL + pgvecto.rs — Base de données vectorielle
-  # ===========================================================================
-  immich-postgres:
-    image: tensorchord/pgvecto-rs:${IMMICH_POSTGRES_TAG}
-    container_name: immich-postgres
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      POSTGRES_DB: ${IMMICH_DB_NAME}
-      POSTGRES_USER: ${IMMICH_DB_USER}
-      POSTGRES_PASSWORD: ${IMMICH_DB_PASSWORD}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-    networks:
-      - immich-internal
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d ${IMMICH_DB_NAME} -U ${IMMICH_DB_USER}"]
-      start_period: 20s
-      interval: 30s
-      retries: 5
-      timeout: 5s
-
-  # ===========================================================================
-  # REDIS — Cache et coordination inter-services
-  # ===========================================================================
-  immich-redis:
-    image: redis:7-alpine
-    container_name: immich-redis
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    command: --requirepass ${IMMICH_REDIS_PASSWORD}
-    networks:
-      - immich-internal
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a ${IMMICH_REDIS_PASSWORD} ping | grep -q PONG"]
-      start_period: 10s
-      interval: 30s
-      retries: 5
-      timeout: 3s
-
-  # ===========================================================================
-  # IMMICH SERVER — Application principale
-  # ===========================================================================
   immich-server:
-    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION}
-    container_name: immich-server
-    restart: unless-stopped
-
-    environment:
-      # Connexion base de données
-      DB_HOSTNAME: immich-postgres
-      DB_PORT: "5432"
-      DB_USERNAME: ${IMMICH_DB_USER}
-      DB_PASSWORD: ${IMMICH_DB_PASSWORD}
-      DB_DATABASE_NAME: ${IMMICH_DB_NAME}
-
-      # Connexion Redis
-      REDIS_HOSTNAME: immich-redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${IMMICH_REDIS_PASSWORD}
-
-      # URL publique — utilisée pour les liens de partage et les notifications
-      IMMICH_SERVER_URL: "https://immich.${DOMAIN}"
-
-      TZ: ${TZ}
-
+    container_name: immich_server
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    # extends:
+    #   file: hwaccel.transcoding.yml
+    #   service: cpu # set to one of [nvenc, quicksync, rkmpp, vaapi, vaapi-wsl] for accelerated transcoding
     volumes:
-      # Dossier principal de stockage des photos/vidéos originales
-      # CRITIQUE : sauvegarder régulièrement (Proxmox Backup Server)
-      - ${IMMICH_UPLOAD_LOCATION}:/usr/src/app/upload
-
-      # En Phase 4, remplacer par NFS vers le NAS :
-      # - type: nfs
-      #   source: 10.0.60.20:/immich-photos
-      #   target: /usr/src/app/upload
-
+      # Do not edit the next line. If you want to change the media storage location on your system, edit the value of UPLOAD_LOCATION in the .env file
+      - ${UPLOAD_LOCATION}:/data
       - /etc/localtime:/etc/localtime:ro
-
+    env_file:
+      - .env
+    ports:
+      - '2283:2283'
+    depends_on:
+      - redis
+      - database
+    restart: always
+    healthcheck:
+      disable: false
     networks:
+      - default
       - traefik-proxy
-      - immich-internal
 
-    depends_on:
-      immich-postgres:
-        condition: service_healthy
-      immich-redis:
-        condition: service_healthy
-
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-proxy"
-
-      # Cloudflare (Let's Encrypt) — accessible depuis internet pour upload mobile
-      - "traefik.http.routers.immich.rule=Host(`immich.${DOMAIN}`)"
-      - "traefik.http.routers.immich.entrypoints=websecure"
-      - "traefik.http.routers.immich.tls.certresolver=cloudflare"
-
-      # PAS de internal-only (upload depuis les téléphones de la famille)
-      # PAS de authentik (Immich a sa propre gestion utilisateurs + partage familial)
-      # Rate limit uniquement (protection brute force sur le login)
-      - "traefik.http.routers.immich.middlewares=rate-limit@file"
-
-      - "traefik.http.services.immich.loadbalancer.server.port=2283"
-
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:2283/api/server/ping > /dev/null"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  # ===========================================================================
-  # IMMICH MACHINE LEARNING — Intelligence Artificielle
-  # ===========================================================================
-  # Ce container télécharge et exécute des modèles IA pour :
-  #   - Reconnaissance de visages (regroupe automatiquement par personne)
-  #   - CLIP embeddings (recherche sémantique : taper "chien plage" trouve les photos)
-  #   - Reconnaissance d'objets et de lieux
-  #
-  # RESSOURCES :
-  #   Premier démarrage : télécharge ~1-2 Go de modèles (cache dans model-cache)
-  #   RAM au repos : ~500 Mo
-  #   RAM pendant analyse : 1-2 Go selon les modèles
-  #
-  # DÉSACTIVER SI RESSOURCES LIMITÉES :
-  #   Commenter ce service entier. Immich fonctionnera sans IA
-  #   (pas de reconnaissance faciale, pas de recherche sémantique).
-  #   La désactivation est réversible — les analyses s'exécuteront quand
-  #   tu réactiveras le service.
-  #
-  # ACCÉLÉRATION GPU (optionnel, Phase avancée) :
-  #   Immich supporte CUDA (NVIDIA), OpenVINO (Intel), ou ROCm (AMD)
-  #   pour accélérer les analyses ML. Voir docs Immich.
-  # ===========================================================================
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION}
-    container_name: immich-machine-learning
-    restart: unless-stopped
-
-    environment:
-      REDIS_HOSTNAME: immich-redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${IMMICH_REDIS_PASSWORD}
-      TZ: ${TZ}
-
+    container_name: immich_machine_learning
+    # For hardware acceleration, add one of -[armnn, cuda, rocm, openvino, rknn] to the image tag.
+    # Example tag: ${IMMICH_VERSION:-release}-cuda
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
+    # extends: # uncomment this section for hardware acceleration - see https://docs.immich.app/features/ml-hardware-acceleration
+    #   file: hwaccel.ml.yml
+    #   service: cpu # set to one of [armnn, cuda, rocm, openvino, openvino-wsl, rknn] for accelerated inference - use the `-wsl` version for WSL2 where applicable
     volumes:
-      # Cache des modèles ML téléchargés — NE PAS supprimer (re-téléchargement long)
-      - ./data/ml-model-cache:/cache
-
-    networks:
-      - immich-internal   # Pas de traefik-proxy : contacté uniquement par immich-server
-
-    depends_on:
-      immich-redis:
-        condition: service_healthy
-
+      - model-cache:/cache
+    env_file:
+      - .env
+    restart: always
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:3003/ping')\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s   # Long au premier démarrage (téléchargement des modèles)
+      disable: false
+
+  redis:
+    container_name: immich_redis
+    image: docker.io/valkey/valkey:9@sha256:3b55fbaa0cd93cf0d9d961f405e4dfcc70efe325e2d84da207a0a8e6d8fde4f9
+    healthcheck:
+      test: redis-cli ping || exit 1
+    restart: always
+
+  database:
+    container_name: immich_postgres
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+      # Uncomment the DB_STORAGE_TYPE: 'HDD' var if your database isn't stored on SSDs
+      # DB_STORAGE_TYPE: 'HDD'
+    volumes:
+      # Do not edit the next line. If you want to change the database storage location on your system, edit the value of DB_DATA_LOCATION in the .env file
+      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+    shm_size: 128mb
+    restart: always
+    healthcheck:
+      disable: false
+
+volumes:
+  model-cache:
 
 networks:
+  default:
+    name: immich_default
+
   traefik-proxy:
     external: true
     name: traefik-proxy
-  # PAS internal: true — immich-machine-learning doit télécharger les modèles IA
-  # depuis Hugging Face au premier démarrage.
-  # À sécuriser en Phase 5 via des règles OPNsense granulaires
-  # (autoriser uniquement huggingface.co depuis le VLAN 30).
-  immich-internal:
-    name: immich-internal
