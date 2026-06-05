@@ -1,0 +1,173 @@
+# =============================================================================
+# config/brokers-gdpr.yml
+# Liste des data brokers — Méthodes de suppression
+# =============================================================================
+# Statuts opt-out :
+#   email     → Envoi automatique par opt-out-engine
+#   web-form  → Lien direct pour action manuelle
+#   gdpr-only → Uniquement via demande RGPD formelle (lettre ou formulaire)
+#   paid      → Service payant de suppression (ex: DeleteMe)
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BROKERS SUPPORTANT L'OPT-OUT PAR EMAIL — Automatisables
+# ─────────────────────────────────────────────────────────────────────────────
+email_opt_out:
+
+  # Brokers US majeurs (actifs en Europe, soumis RGPD si résidents EU)
+  - name: Spokeo
+    email: privacy@spokeo.com
+    subject: "GDPR/CCPA Data Deletion Request"
+    notes: "Inclure nom complet, email, date de naissance dans le corps"
+
+  - name: WhitePages
+    email: support@whitepages.com
+    subject: "Request to Remove My Personal Information"
+
+  - name: Intelius
+    email: privacy@intelius.com
+    subject: "Data Deletion Request - GDPR Article 17"
+
+  - name: BeenVerified
+    email: privacy@beenverified.com
+    subject: "Data Removal Request"
+    notes: "Mentionner résidence en France = protection RGPD obligatoire"
+
+  - name: Radaris
+    email: privacy@radaris.com
+    subject: "Remove Personal Information Request"
+
+  - name: PeopleFinder
+    email: privacy@peoplefinder.com
+    subject: "GDPR Data Deletion Request"
+
+  - name: InstantCheckmate
+    email: support@instantcheckmate.com
+    subject: "Data Removal Request"
+
+  - name: TruthFinder
+    email: support@truthfinder.com
+    subject: "GDPR - Personal Data Deletion Request"
+
+  - name: PeopleLooker
+    email: privacy@peoplelooker.com
+    subject: "Data Deletion Request"
+
+  - name: USPhoneBook
+    email: privacy@usphonebook.com
+    subject: "Remove My Information"
+
+  - name: ZabaSearch
+    email: privacy@zabaware.com
+    subject: "Data Removal Request"
+
+  # Grands agrégateurs soumis RGPD (obligatoire, réponse sous 30j)
+  - name: Acxiom
+    email: dataprivacy@acxiom.com
+    subject: "RGPD Article 17 - Demande d'effacement de données personnelles"
+    notes: "Inclure une pièce d'identité — obligatoire pour Acxiom"
+    requires_id: true
+
+  - name: Epsilon
+    email: privacy@epsilon.com
+    subject: "GDPR Article 17 - Data Erasure Request"
+
+  - name: Equifax (marketing data)
+    email: datasubject.requests@equifax.com
+    subject: "GDPR Article 17 - Erasure Request"
+    notes: "Distinct du dossier de crédit — concerne uniquement les données marketing"
+
+  # Brokers français
+  - name: Kompass
+    email: privacy@kompass.com
+    subject: "Demande de suppression de données personnelles - RGPD"
+
+  - name: Societe.com
+    email: contact@societe.com
+    subject: "Droit à l'effacement - RGPD"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BROKERS AVEC FORMULAIRE WEB — Action manuelle requise
+# ─────────────────────────────────────────────────────────────────────────────
+web_form_opt_out:
+
+  - name: Google (search results)
+    url: https://search.google.com/search-console/remove-outdated-content
+    estimated_time: "5 min"
+    notes: "Demander la suppression de résultats Google contenant données perso"
+
+  - name: MyLife
+    url: https://www.mylife.com/remove-my-information/
+    estimated_time: "10 min"
+
+  - name: Pipl
+    url: https://pipl.com/personal-information-removal-request
+    estimated_time: "5 min"
+
+  - name: FastPeopleSearch
+    url: https://www.fastpeoplesearch.com/removal
+    estimated_time: "3 min"
+
+  - name: Addresses.com
+    url: https://www.addresses.com/optout.php
+    estimated_time: "5 min"
+
+  - name: Ancestry (annuaires publics)
+    url: https://www.ancestry.fr/cs/legal/privacycenter
+    estimated_time: "10 min"
+
+  - name: Pages Blanches (France Télécom)
+    url: https://www.pagesjaunes.fr/pagesblanches/contacts-me-concernant
+    estimated_time: "5 min"
+    notes: "Nécessite un compte ou un numéro de téléphone pour identifier la fiche"
+
+  - name: 118712
+    url: https://www.118712.fr/privacy
+    estimated_time: "5 min"
+
+  - name: LinkedIn
+    url: https://www.linkedin.com/help/linkedin/answer/50191
+    estimated_time: "3 min"
+    notes: "Uniquement si profil existant non souhaité"
+
+  - name: Have I Been Pwned (opt-out notifications)
+    url: https://haveibeenpwned.com/OptOut
+    estimated_time: "2 min"
+    notes: "Optionnel : retire l'email des notifications publiques"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BROKERS NÉCESSITANT UNE DÉMARCHE RGPD FORMELLE
+# ─────────────────────────────────────────────────────────────────────────────
+gdpr_formal:
+
+  - name: Oracle Data Cloud (Bluekai)
+    url: https://datacloudoptout.oracle.com/
+    notes: "Profil publicitaire — remplir le formulaire RGPD + pièce d'identité"
+
+  - name: Nielsen Marketing Cloud
+    url: https://www.nielsen.com/us/en/legal/privacy-statement/extendingyourprivacyrights/
+    notes: "Données marketing enrichies"
+
+  - name: Experian (marketing)
+    url: https://www.experian.com/privacy/opting_out.html
+    notes: "Distinct du dossier de crédit — liste de marketing direct"
+
+  - name: LexisNexis
+    url: https://optout.lexisnexis.com/
+    notes: "Requiert souvent vérification d'identité + courrier recommandé"
+    requires_id: true
+
+  - name: Thomson Reuters (CLEAR)
+    notes: "B2B uniquement — contacter via DPO si données trouvées"
+    dpo_email: privacy@thomsonreuters.com
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RESSOURCES UTILES
+# ─────────────────────────────────────────────────────────────────────────────
+resources:
+  # Modèle de courrier RGPD Article 17 (droit à l'effacement)
+  gdpr_template: "templates/gdpr-erasure-request-fr.txt"
+  # CNIL — Signaler un refus de suppression (France)
+  cnil: https://www.cnil.fr/fr/plaintes
+  # Guide complet suppression data brokers (mis à jour régulièrement)
+  guide: https://joindeleteme.com/help/diy-free-opt-out-guide/

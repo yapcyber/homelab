@@ -1,0 +1,32 @@
+http:
+  routers:
+    grafana:
+      rule: "Host(`grafana.yapserver.fr`)"
+      entrypoints:
+        - websecure
+      tls:
+        certResolver: cloudflare
+      middlewares:
+        - internal-only@file
+      service: grafana-svc
+
+    prometheus:
+      rule: "Host(`prometheus.yapserver.fr`)"
+      entrypoints:
+        - websecure
+      tls:
+        certResolver: cloudflare
+      middlewares:
+        - internal-only@file
+      service: prometheus-svc
+
+  services:
+    grafana-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.11:3000"
+
+    prometheus-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.11:9090"

@@ -1,0 +1,14 @@
+http:
+  routers:
+    spiderfoot:
+      rule: "Host(`osint.yapserver.fr`)"
+      entryPoints: [websecure]
+      tls:
+        certResolver: cloudflare
+      middlewares: [internal-only@file]
+      service: spiderfoot-svc
+  services:
+    spiderfoot-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.17:5001"

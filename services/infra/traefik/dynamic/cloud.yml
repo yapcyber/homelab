@@ -1,0 +1,110 @@
+http:
+  routers:
+    vaultwarden:
+      rule: "Host(`vault.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: vaultwarden-svc
+
+    vaultwarden-admin:
+      rule: "Host(`vault.yapserver.fr`) && PathPrefix(`/admin`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: vaultwarden-svc
+
+    nextcloud:
+      rule: "Host(`cloud.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [nextcloud-redirect@file]
+      service: nextcloud-svc
+
+    immich:
+      rule: "Host(`photos.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      service: immich-svc
+
+    jellyfin:
+      rule: "Host(`jellyfin.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      service: jellyfin-svc
+
+    qbittorrent:
+      rule: "Host(`qbit.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: qbit-svc
+
+    prowlarr:
+      rule: "Host(`prowlarr.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: prowlarr-svc
+
+    radarr:
+      rule: "Host(`radarr.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: radarr-svc
+
+    sonarr:
+      rule: "Host(`sonarr.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: sonarr-svc
+
+  middlewares:
+    nextcloud-redirect:
+      redirectRegex:
+        regex: "https://(.*)/.well-known/(?:card|cal)dav"
+        replacement: "https://${1}/remote.php/dav"
+        permanent: true
+
+  services:
+    vaultwarden-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:80"
+
+    nextcloud-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:8080"
+
+    immich-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:2283"
+
+    jellyfin-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:8096"
+
+    qbit-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:8080"
+
+    prowlarr-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:9696"
+
+    radarr-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:7878"
+
+    sonarr-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:8989"

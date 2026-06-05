@@ -1,0 +1,18 @@
+http:
+  routers:
+    openvas:
+      rule: "Host(`openvas.yapserver.fr`)"
+      entryPoints: [websecure]
+      tls:
+        certResolver: cloudflare
+      middlewares: [internal-only@file]
+      service: openvas-svc
+  services:
+    openvas-svc:
+      loadBalancer:
+        servers:
+          - url: "https://10.0.30.15:443"
+        serversTransport: openvas-insecure@file
+  serversTransports:
+    openvas-insecure:
+      insecureSkipVerify: true

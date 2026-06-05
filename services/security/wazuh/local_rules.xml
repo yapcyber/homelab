@@ -1,0 +1,29 @@
+<group name="local,">
+  <rule id="100200" level="0">
+    <if_sid>5104</if_sid>
+    <match>veth|docker|br-</match>
+    <description>Promiscuous mode interface Docker (veth/bridge) - benin</description>
+  </rule>
+  <rule id="100201" level="0">
+    <if_sid>87101</if_sid>
+    <description>VirusTotal: aucun enregistrement (fichier inconnu) - benin</description>
+  </rule>
+  <rule id="100202" level="0">
+    <if_sid>5501,5502</if_sid>
+    <description>PAM ouverture/fermeture de session - benin</description>
+  </rule>
+  <rule id="100203" level="0">
+    <if_sid>87203</if_sid>
+    <description>Proxmox VE authentification reussie - benin (login admin)</description>
+  </rule>
+  <rule id="100204" level="0">
+    <if_sid>86003</if_sid>
+    <match>failed to validate image signature</match>
+    <description>Docker: signature image multi-arch - benin</description>
+  </rule>
+  <rule id="100210" level="0">
+    <if_sid>510</if_sid>
+    <match>Trojaned version of file '/usr/bin/chsh'</match>
+    <description>Rootcheck FP: chsh legitime (passwd) verifie clean</description>
+  </rule>
+</group>

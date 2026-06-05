@@ -1,0 +1,7 @@
+services:
+  spiderfoot:
+    image: spiderfoot:local
+    restart: unless-stopped
+    ports: [ "5001:5001" ]
+    volumes: [ "sf:/home/spiderfoot/.spiderfoot" ]
+volumes: { sf: {} }

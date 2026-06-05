@@ -1,0 +1,117 @@
+# =============================================================================
+# services/cv-pipeline/docker-compose.yml
+# Pipeline de Candidature Automatisé — CV-as-Code
+# =============================================================================
+#
+# WORKFLOW COMPLET :
+#   1. Surveillance IMAP d'une boîte mail dédiée (alertes LinkedIn, HelloWork, WTTJ)
+#   2. Extraction et filtrage des offres (domaine, niveau, distance < 1h de Lille)
+#   3. File FIFO dans SQLite — une branche Git créée par offre validée
+#   4. Adaptation IA du CV en Markdown (Claude API, guardrails anti-hallucination)
+#   5. Push → GitHub Actions compile le Markdown → PDF via Typst
+#   6. Notification email avec le PDF en pièce jointe
+#
+# DÉPLOIEMENT :
+#   1. Créer une boîte mail dédiée (ex: offres-alternance@gmail.com)
+#   2. Remplir .env avec les credentials
+#   3. Déposer le Master CV en Markdown dans ./cv/master-cv.md
+#   4. Configurer config/criteria.yml (critères de filtrage)
+#   5. docker compose up -d
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # CV PIPELINE — Service principal Python
+  # ===========================================================================
+  cv-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cv-pipeline
+    restart: unless-stopped
+    environment:
+      # Email à surveiller (alertes offres d'emploi)
+      - IMAP_HOST=${IMAP_HOST}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - IMAP_USER=${IMAP_USER}
+      - IMAP_PASS=${IMAP_PASS}
+      - IMAP_FOLDER=${IMAP_FOLDER:-INBOX}
+      - IMAP_CHECK_INTERVAL=${IMAP_CHECK_INTERVAL:-300}  # 5 minutes
+
+      # Routing API pour calcul distances (OpenRouteService — gratuit)
+      - ORS_API_KEY=${ORS_API_KEY}
+      - HOME_ADDRESS=${HOME_ADDRESS}           # Adresse de départ pour calcul
+      - MAX_COMMUTE_MINUTES=${MAX_COMMUTE_MINUTES:-60}
+
+      # Claude API pour adaptation CV (anti-hallucination)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AI_MODEL=${AI_MODEL:-claude-sonnet-4-20250514}
+
+      # Git — repo du CV
+      - GIT_REPO_URL=${GIT_REPO_URL}          # ex: git@github.com:user/cv.git
+      - GIT_USERNAME=${GIT_USERNAME}
+      - GIT_EMAIL=${GIT_EMAIL}
+
+      # SMTP — notifications
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - NOTIFY_EMAIL=${NOTIFY_EMAIL}
+
+      - TZ=${TZ:-Europe/Paris}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    volumes:
+      # Master CV en Markdown (source de vérité)
+      - ./cv:/cv:ro
+      # Critères de filtrage
+      - ./config:/config:ro
+      # Base de données SQLite (file d'attente des offres)
+      - cv-pipeline-db:/data
+      # Clé SSH pour push Git
+      - ${SSH_KEY_PATH}:/root/.ssh/id_rsa:ro
+    networks:
+      - traefik-proxy   # Pour les potentielles webhooks entrantes
+    labels:
+      - "traefik.enable=false"   # Pas d'accès web direct (service background)
+
+  # ===========================================================================
+  # DASHBOARD — Interface web de suivi des candidatures
+  # ===========================================================================
+  # Interface légère pour visualiser les offres dans la file, leur statut,
+  # les CV générés, et les réponses reçues.
+  # Protégée par Authentik.
+  cv-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: cv-dashboard
+    restart: unless-stopped
+    environment:
+      - DATABASE_PATH=/data/cv-pipeline.db
+      - TZ=${TZ:-Europe/Paris}
+    volumes:
+      - cv-pipeline-db:/data:ro
+      - ./cv:/cv:ro
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+      - "traefik.http.routers.cv-dashboard.rule=Host(`cv.${DOMAIN}`)"
+      - "traefik.http.routers.cv-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.cv-dashboard.tls.certresolver=step-ca"
+      - "traefik.http.routers.cv-dashboard.middlewares=authentik@file"
+      - "traefik.http.services.cv-dashboard.loadbalancer.server.port=8080"
+    depends_on:
+      - cv-pipeline
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy
+
+volumes:
+  cv-pipeline-db:

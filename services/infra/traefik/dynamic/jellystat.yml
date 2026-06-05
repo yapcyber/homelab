@@ -1,0 +1,14 @@
+http:
+  routers:
+    jellystat:
+      rule: "Host(`jellystat.yapserver.fr`)"
+      entryPoints: [websecure]
+      tls:
+        certResolver: cloudflare
+      middlewares: [internal-only@file]
+      service: jellystat-svc
+  services:
+    jellystat-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:3000"

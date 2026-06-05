@@ -1,0 +1,60 @@
+# =============================================================================
+# config/profile-template.yml
+# Template de profil — Copier dans config/profiles/<prenom>/profile.yml
+# =============================================================================
+# IMPORTANT : Chiffrer ce fichier avec SOPS avant de le committer dans Git.
+# Commande : sops --encrypt --age <ta-clé-publique-age> profile.yml > profile.enc.yml
+# Ne jamais committer profile.yml en clair (ajouter dans .gitignore).
+# =============================================================================
+
+# Identifiant unique du profil (utilisé pour nommer les rapports et dossiers)
+profile_id: "prenom-nom"
+display_name: "Prénom NOM"
+
+# Informations à surveiller
+identity:
+  # Noms sous lesquels chercher
+  names:
+    - "Prénom NOM"
+    - "Prénom"         # prénom seul si suffisamment rare
+
+  # Adresses email (toutes, actives ou non)
+  emails:
+    - "email@example.com"
+    - "ancien-email@example.com"
+
+  # Numéros de téléphone (format international)
+  phones:
+    - "+33 6 XX XX XX XX"
+
+  # Adresse postale (pour recherche chez les data brokers)
+  address:
+    street: "X rue Example"
+    city: "Ville"
+    zip: "XXXXX"
+    country: "France"
+
+  # Date de naissance (pour identifier les fiches chez les data brokers)
+  birth_year: 1990
+
+  # Pseudonymes à rechercher sur 2500+ sites via Maigret
+  # Maigret génère un rapport HTML par pseudo avec tous les profils trouvés
+  pseudos:
+    - "pseudo1"
+    - "pseudo2"
+    - "pseudo3"
+
+# Préférences de notification
+notifications:
+  email: "email-alertes@example.com"   # Où envoyer les alertes
+  alert_on_new_breach: true
+  alert_on_new_pseudo_found: true
+  weekly_summary: true
+
+# Opt-out data brokers
+opt_out:
+  # Auto = envoie automatiquement les emails RGPD aux brokers supportés
+  # Manual = génère la liste mais n'envoie rien
+  mode: "auto"
+  # Dernière exécution (mis à jour automatiquement par opt-out-engine)
+  last_run: null

@@ -1,0 +1,21 @@
+services:
+  jellystat-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [ "db:/var/lib/postgresql/data" ]
+  jellystat:
+    image: cyfershepard/jellystat:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_IP: jellystat-db
+      POSTGRES_PORT: 5432
+      JWT_SECRET: ${JWT_SECRET}
+    ports: [ "3000:3000" ]
+    volumes: [ "backup:/app/backend/backup-data" ]
+    depends_on: [ jellystat-db ]
+volumes: { db: {}, backup: {} }

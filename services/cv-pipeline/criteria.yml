@@ -1,0 +1,145 @@
+# =============================================================================
+# config/criteria.yml
+# Critères de filtrage des offres d'emploi
+# =============================================================================
+# Ces critères définissent quelles offres sont acceptées dans le pipeline.
+# Toutes les conditions doivent être satisfaites (logique AND).
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CRITÈRE 1 : Domaine métier
+# ─────────────────────────────────────────────────────────────────────────────
+# Une offre est acceptée si elle contient AU MOINS UN des mots-clés ci-dessous
+# dans son titre ou sa description (insensible à la casse).
+domain:
+  mode: "any"   # any = au moins un match suffit
+  keywords:
+    # Cybersécurité
+    - "cybersécurité"
+    - "cybersecurity"
+    - "sécurité informatique"
+    - "soc analyst"
+    - "soc engineer"
+    - "analyste sécurité"
+    - "pentest"
+    - "pentester"
+    - "test d'intrusion"
+    - "blue team"
+    - "red team"
+    - "siem"
+    - "incident response"
+    - "threat intelligence"
+    - "vulnerability"
+    - "gestion des vulnérabilités"
+    - "wazuh"
+    - "splunk"
+    # Infrastructure / Systèmes
+    - "infrastructure"
+    - "sysadmin"
+    - "administrateur système"
+    - "administrateur réseau"
+    - "devops"
+    - "devsecops"
+    - "cloud engineer"
+    - "ingénieur cloud"
+    - "ingénieur système"
+    - "réseaux et sécurité"
+    - "linux administrator"
+    - "proxmox"
+    - "vmware"
+
+  # Mots-clés qui EXCLUENT automatiquement une offre (même si les mots positifs matchent)
+  exclude_keywords:
+    - "commercial"
+    - "développeur web"
+    - "frontend developer"
+    - "data scientist"
+    - "data analyst"       # sauf si accompagné de "sécurité"
+    - "chef de projet"
+    - "ingénieur qualité"
+    - "support niveau 1"   # trop junior pour un Mastère
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CRITÈRE 2 : Niveau requis
+# ─────────────────────────────────────────────────────────────────────────────
+# Exclure les offres clairement sous-qualifiées ou sur-qualifiées.
+level:
+  # Contrats acceptés
+  contract_types:
+    - "alternance"
+    - "apprentissage"
+    - "contrat de professionnalisation"
+    - "stage"          # Garder les stages optionnel
+  contract_types_require_any: true
+
+  # Niveau d'études indiqué dans l'offre — exclure si trop junior
+  study_level_exclude:
+    - "bac+2"
+    - "bts"
+    - "iut"
+    - "niveau bac"
+
+  # Exclure les offres qui demandent explicitement de l'expérience significative
+  experience_exclude_keywords:
+    - "5 ans d'expérience"
+    - "10 ans"
+    - "senior uniquement"
+    - "confirmé"           # Peut être trop restrictif — adapter si besoin
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CRITÈRE 3 : Géographie — Distance depuis Lille
+# ─────────────────────────────────────────────────────────────────────────────
+geography:
+  # Adresse de référence (doit correspondre à HOME_ADDRESS dans .env)
+  home: "Lille, France"
+
+  # Temps de trajet maximum en minutes (en transports ou voiture selon mode)
+  max_commute_minutes: 60
+
+  # Mode de transport pour l'API OpenRouteService
+  # Options: driving-car, cycling-regular, foot-walking, public-transport
+  transport_mode: "driving-car"
+
+  # Villes/zones acceptées sans calcul de distance (override automatique)
+  always_accept_locations:
+    - "Lille"
+    - "Roubaix"
+    - "Tourcoing"
+    - "Villeneuve d'Ascq"
+    - "Hauts-de-France"
+    - "Remote"
+    - "Télétravail"
+    - "Full remote"
+    - "100% télétravail"
+
+  # Villes exclues sans calcul (trop loin, connu d'avance)
+  always_reject_locations:
+    - "Lyon"
+    - "Marseille"
+    - "Bordeaux"
+    - "Toulouse"
+    - "Nantes"
+    - "Paris"   # Commenter si Paris à 1h de Lille en train est acceptable
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PARAMÈTRES DU PIPELINE
+# ─────────────────────────────────────────────────────────────────────────────
+pipeline:
+  # Quoi faire d'une offre validée
+  on_match:
+    create_git_branch: true      # Crée cv-<company>-<job-slug>
+    adapt_cv: true               # Lance l'adaptation IA
+    notify_email: true           # Envoie le PDF par email
+
+  # Quoi faire d'une offre rejetée
+  on_reject:
+    log_to_db: true              # Garder trace pour analyse
+    notify_email: false          # Pas de notification pour les rejets
+    reason_required: true        # Log le motif du rejet
+
+  # Délai de repos entre deux traitements d'offres (secondes)
+  # Évite de saturer les APIs
+  processing_delay: 5
+
+  # Nombre maximum d'offres à traiter par cycle (pour éviter les rafales)
+  max_per_cycle: 5

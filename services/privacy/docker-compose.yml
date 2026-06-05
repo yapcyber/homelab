@@ -1,0 +1,152 @@
+# =============================================================================
+# services/privacy/docker-compose.yml
+# Stack Privacy & OSINT familiale — Profils cloisonnés
+# =============================================================================
+#
+# ARCHITECTURE :
+#   spiderfoot      → OSINT agrégateur avec interface web (scans planifiés)
+#   maigret-runner  → Lookup username sur 2500+ sites, génère rapports HTML
+#   breach-monitor  → Surveillance continue des emails via HaveIBeenPwned
+#   opt-out-engine  → Envoi automatique emails suppression aux data brokers
+#
+# ISOLATION DES PROFILS :
+#   Chaque membre de la famille a son dossier dans config/profiles/<nom>/
+#   Les dossiers sont chiffrés avec SOPS/Age (clé privée par membre)
+#   Authentik SSO contrôle qui peut voir quel profil dans l'interface web
+#
+# DÉPLOIEMENT :
+#   1. Copier config/profile-template.yml → config/profiles/<membre>/profile.yml
+#   2. Remplir le profil (voir template)
+#   3. Chiffrer : sops --encrypt --age <pubkey> profile.yml > profile.enc.yml
+#   4. docker compose up -d
+#   5. Accéder à SpiderFoot : https://privacy.yapserver.fr
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # SPIDERFOOT — OSINT agrégateur (web UI)
+  # ===========================================================================
+  # SpiderFoot lance des scans sur un ou plusieurs "targets" (email, nom,
+  # téléphone, pseudo, adresse IP). Il agrège des dizaines de sources.
+  # Interface web protégée par Authentik (forward auth Traefik).
+  # Un scan = un profil famille (nommer les scans par membre pour les isoler).
+  spiderfoot:
+    image: smicallef/spiderfoot:latest
+    container_name: privacy-spiderfoot
+    restart: unless-stopped
+    command: -l 0.0.0.0:5001
+    volumes:
+      - spiderfoot-data:/home/spiderfoot/.spiderfoot
+    networks:
+      - traefik-proxy
+      - privacy-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+      - "traefik.http.routers.spiderfoot.rule=Host(`privacy.${DOMAIN}`)"
+      - "traefik.http.routers.spiderfoot.entrypoints=websecure"
+      - "traefik.http.routers.spiderfoot.tls.certresolver=step-ca"
+      # Authentik forward auth : seuls les membres famille autorisés
+      - "traefik.http.routers.spiderfoot.middlewares=authentik@file,rate-limit@file"
+      - "traefik.http.services.spiderfoot.loadbalancer.server.port=5001"
+
+  # ===========================================================================
+  # MAIGRET RUNNER — Recherche username sur 2500+ sites
+  # ===========================================================================
+  # Maigret est lancé en mode scheduler : toutes les X heures, il lit les
+  # profils dans /config/profiles/, extrait les pseudonymes, lance les scans
+  # et sauvegarde les rapports HTML dans le dossier du profil concerné.
+  # Les rapports sont lisibles directement dans le navigateur.
+  maigret-runner:
+    image: ghcr.io/soxoj/maigret:latest
+    container_name: privacy-maigret
+    restart: unless-stopped
+    entrypoint: ["python", "/app/runner.py"]
+    environment:
+      - SCAN_INTERVAL_HOURS=${MAIGRET_SCAN_INTERVAL:-24}
+      - TZ=${TZ}
+    volumes:
+      # Profils à scanner (lecture seule)
+      - ./config/profiles:/config/profiles:ro
+      # Rapports générés (écriture)
+      - ./reports:/reports
+      # Script runner personnalisé
+      - ./runner.py:/app/runner.py:ro
+    networks:
+      - privacy-internal
+
+  # ===========================================================================
+  # BREACH MONITOR — Surveillance des leaks via HaveIBeenPwned
+  # ===========================================================================
+  # Vérifie régulièrement si les emails des profils sont apparus dans de
+  # nouvelles bases de données compromises.
+  # Envoie une alerte par email (via le serveur SMTP configuré) en cas de
+  # nouvelle fuite détectée.
+  # API HIBP gratuite : 1 requête par email tous les 10 secondes.
+  breach-monitor:
+    image: python:3.12-slim
+    container_name: privacy-breach-monitor
+    restart: unless-stopped
+    command: >
+      sh -c "pip install -q requests pyyaml schedule python-dotenv &&
+             python /app/breach_monitor.py"
+    environment:
+      - HIBP_API_KEY=${HIBP_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - CHECK_INTERVAL_HOURS=${BREACH_CHECK_INTERVAL:-12}
+      - TZ=${TZ}
+    volumes:
+      - ./config/profiles:/config/profiles:ro
+      - ./src/breach_monitor.py:/app/breach_monitor.py:ro
+      - breach-monitor-state:/state
+    networks:
+      - privacy-internal
+
+  # ===========================================================================
+  # OPT-OUT ENGINE — Demandes de suppression aux data brokers
+  # ===========================================================================
+  # Lit les profils, lit la liste des data brokers (config/brokers-gdpr.yml),
+  # envoie un email de suppression RGPD/CCPA pour chaque broker dont l'opt-out
+  # se fait par email, et marque le statut dans un fichier de suivi.
+  # Les brokers nécessitant une action manuelle sont listés dans le rapport.
+  opt-out-engine:
+    image: python:3.12-slim
+    container_name: privacy-opt-out
+    restart: "no"   # Mode manuel — lancer via: docker compose run opt-out-engine
+    # Pour lancer automatiquement mensuellement, changer en unless-stopped
+    # et ajouter un scheduler
+    command: >
+      sh -c "pip install -q requests pyyaml jinja2 python-dotenv &&
+             python /app/opt_out.py"
+    environment:
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - DRY_RUN=${OPT_OUT_DRY_RUN:-true}  # true = simule sans envoyer
+      - TZ=${TZ}
+    volumes:
+      - ./config/profiles:/config/profiles:ro
+      - ./config/brokers-gdpr.yml:/config/brokers-gdpr.yml:ro
+      - ./src/opt_out.py:/app/opt_out.py:ro
+      - ./templates:/app/templates:ro
+      - opt-out-state:/state   # Historique : qui a été contacté, quand, réponse
+    networks:
+      - privacy-internal
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy
+  privacy-internal:
+    driver: bridge
+    internal: true   # Isolation : pas d'accès internet direct sauf via Traefik
+
+volumes:
+  spiderfoot-data:
+  breach-monitor-state:
+  opt-out-state:
