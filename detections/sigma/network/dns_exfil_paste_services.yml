@@ -1,0 +1,25 @@
+title: DNS Query to Paste/Tunneling Services (possible C2/exfil)
+id: 123456789
+status: experimental
+description: Detecte les requetes DNS vers des services de paste/tunneling souvent abuses pour C2 ou exfiltration
+references:
+  - https://attack.mitre.org/techniques/T1567/
+author: yapcyber
+date: 2026/06/04
+logsource:
+  product: zeek
+  service: dns
+detection:
+  selection:
+    dns.question.name|contains:
+      - 'pastebin.com'
+      - 'ngrok.io'
+      - 'transfer.sh'
+      - 'anonfiles'
+  condition: selection
+falsepositives:
+  - Usage developpeur legitime de pastebin/ngrok
+level: medium
+tags:
+  - attack.exfiltration
+  - attack.t1567
