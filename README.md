@@ -2,189 +2,166 @@
 
 # 🏠 YapServer Homelab
 
-**Building a production-grade homelab — fully documented, every step of the way**
+> Infrastructure homelab auto-hébergée : cloud personnel, médias, et un **Security Operations Center** complet — conçue, durcie et documentée comme environnement d'apprentissage et portfolio orienté **SOC / Detection Engineering**.
 
-[![Phase](https://img.shields.io/badge/Phase-1.5_Portfolio_%26_GitHub-2ea44f?style=for-the-badge)](https://yapserver.fr)
-[![Site](https://img.shields.io/badge/Portfolio-yapserver.fr-00d4aa?style=for-the-badge&logo=docusaurus&logoColor=white)](https://yapserver.fr)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Follow_the_journey-0A66C2?style=for-the-badge&logo=linkedin)](https://linkedin.com/in/VOTRE_PROFIL)
-
-**[📖 Portfolio](https://yapserver.fr) · [📰 Journal de bord](https://yapserver.fr/blog) · [💼 LinkedIn](https://linkedin.com/in/VOTRE_PROFIL)**
-
-</div>
+**Auteur :** [yapcyber](https://github.com/yapcyber) · **Portfolio :** [yapserver.fr](https://yapserver.fr)
 
 ---
 
-## 🎯 What is this?
+## 🎯 Objectif
 
-This repository documents the complete construction of a **production-grade homelab** — from architecture planning to full deployment. Every configuration file, every architectural decision, every problem and solution is tracked here and published on [yapserver.fr](https://yapserver.fr).
+Un homelab à trois usages :
 
-This is not a "spin up a Raspberry Pi" tutorial. It's an infrastructure project designed with the same patterns used in enterprise environments:
+- **Personnel / familial** — gestionnaire de mots de passe, cloud, photos, médias pour les proches.
+- **Sécurité / portfolio** — un véritable SOC maison (détection réseau + hôte, scan de vulnérabilités, detection-as-code) servant de démonstration de compétences en infrastructure, réseau, sécurité et DevOps.
+- **Accès distant** — partout via WireGuard, exposition publique « par exception » via Cloudflare Tunnel.
 
-- **10G SFP+ backbone** between the firewall, switch, and gaming PC
-- **10-VLAN L3 segmentation** on a Cisco 3560X with OPNsense routing
-- **3-node Proxmox HA cluster** with Corosync isolation on dedicated VLAN
-- **Zero Trust exposure** via Cloudflare Tunnels (zero open inbound ports)
-- **Full security stack**: SIEM (Wazuh), WAF (CrowdSec), IDS/IPS (OPNsense), NSM (Security Onion), vulnerability scanner (OpenVAS), internal PKI (Step-CA)
-- **SSO across all services** via Authentik (OIDC, SAML, LDAP)
+Tout est versionné dans ce dépôt et documenté sur le portfolio Docusaurus.
 
 ---
 
-## 🖥️ Hardware
-
-| Component | Machine | Specs | Role |
-|-----------|---------|-------|------|
-| **Firewall** | PC Parefeu | Mellanox ConnectX SFP+ 10G dual-port | OPNsense — WAN 10G + LAN 10G |
-| **Switch** | Cisco WS-C3560X-24P-S | + C3KX-NM-10G (2× SFP+ 10G) | L3, 10 VLANs, SPAN, inter-VLAN routing |
-| **Node 1** | Mini PC 1 |  | Proxmox VE |
-| **Node 2** | Mini PC 2 |  | Proxmox VE |
-| **Node 3** | Mini PC 3 |  | Proxmox VE |
-| **SOC** | Mini PC 4 | 1G admin + 1G SPAN | Security Onion (bare metal) |
-| **Gaming** | Gaming PC | Mellanox SFP+ 10G | Sunshine cloud gaming |
-| **Jump Host** | Laptop |  | Ubuntu 24.04 LTS — Admin |
-
----
-
-## 🌐 Network — 10 VLANs on `10.0.0.0/8`
-
-| VLAN | Name | Subnet | Purpose |
-|------|------|--------|---------|
-| 10 | Management | `10.0.10.0/24` | Proxmox nodes, switch, OPNsense |
-| 20 | Corosync | `10.0.20.0/24` | Proxmox HA heartbeat *(isolated)* |
-| 30 | Production | `10.0.30.0/24` | Application VMs (Docker services) |
-| 40 | DMZ | `10.0.40.0/24` | Traefik, Cloudflare Tunnel |
-| 50 | SOC | `10.0.50.0/24` | Security Onion, Wazuh, OpenVAS |
-| 60 | Storage | `10.0.60.0/24` | NAS, Proxmox Backup Server |
-| 70 | IoT | `10.0.70.0/24` | Home Assistant, smart devices |
-| 80 | Guest | `10.0.80.0/24` | Guest Wi-Fi *(fully isolated)* |
-| 90 | Gaming | `10.0.90.0/24` | Sunshine game streaming |
-| 100 | Admin | `10.0.100.0/24` | Jump Host (Mini PC 5) |
-
----
-
-## 🚀 Services Stack
-
-<details>
-<summary><strong>🔒 Infrastructure & Security</strong></summary>
-
-| Service | Role | Network |
-|---------|------|---------|
-| **OPNsense** | Firewall, routing, WireGuard VPN, IDS/IPS | WAN/LAN |
-| **Traefik v3** | Reverse proxy, TLS termination, service routing | VLAN 40 |
-| **CrowdSec** | Collaborative WAF — blocks known malicious IPs | VLAN 40 |
-| **Authentik** | SSO Identity Provider (OIDC, SAML, LDAP) | VLAN 30 |
-| **Step-CA** | Internal PKI — TLS certificates for all internal services | VLAN 10 |
-| **Wazuh** | SIEM — security events, FIM, vulnerability detection | VLAN 50 |
-| **OpenVAS** | Vulnerability scanner (~33 IPs across all VLANs) | VLAN 50 |
-| **Security Onion** | NSM — full packet capture, Suricata, PCAP | Bare metal |
-
-</details>
-
-<details>
-<summary><strong>☁️ Personal Cloud & Media</strong></summary>
-
-| Service | Role |
-|---------|------|
-| **Nextcloud** | Personal cloud storage — files, contacts, calendar |
-| **Immich** | Photo management with AI face/object recognition |
-| **Jellyfin** | Media server — movies, TV series, music |
-| **Radarr / Sonarr / Prowlarr** | Automated media acquisition |
-| **qBittorrent** | Download client (single-volume `/data` — hardlinks) |
-
-</details>
-
-<details>
-<summary><strong>🛠️ Administration & Monitoring</strong></summary>
-
-| Service | Role |
-|---------|------|
-| **Homarr** | Homelab dashboard — unified service overview |
-| **Netbox** | IPAM & infrastructure documentation (source of truth) |
-| **Proxmox Backup Server** | VM and container backups |
-| **Home Assistant** | Home automation *(Phase 4 — Raspberry Pi, VLAN 70)* |
-
-</details>
-
-<details>
-<summary><strong>🎮 Gaming & Remote Access</strong></summary>
-
-| Service | Role |
-|---------|------|
-| **Sunshine** | Cloud gaming server (10G SFP+ — GPU hardware encoding) |
-| **Moonlight** | Client-side only (iOS, Android, Windows, Apple TV) |
-| **WireGuard** | VPN — remote access to all VLANs + DNS ad-blocking |
-
-</details>
-
----
-
-## 📋 Architecture Decisions (ADR Log)
-
-| # | Decision | Choice | Rationale |
-|---|----------|--------|-----------|
-| ADR-001 | NAT Architecture | Full DMZ (ISP box in bridge mode) | Single NAT, OPNsense in full control |
-| ADR-002 | Service Exposure | Cloudflare Tunnels only | Zero open inbound ports |
-| ADR-003 | DNS Strategy | Split-Horizon (Unbound + Cloudflare) | Same `yapserver.fr` domain internally and externally |
-| ADR-004 | Identity Provider | Authentik | OIDC/SAML/LDAP, simpler than Kerberos/AD |
-| ADR-005 | Vulnerability Scanning | OpenVAS (Greenbone CE) | ~33 IPs — exceeds Nessus free limit (16) |
-| ADR-006 | Jump Host OS | Ubuntu 24.04 LTS | LTS until 2029, maximum DevOps tooling compatibility |
-| ADR-007 | Portfolio Framework | Docusaurus v3 | Native FR/EN i18n, blog + docs, Markdown-only |
-| ADR-008 | Ad Blocking | OPNsense Unbound (blocklists) | No need for separate Pi-hole |
-| ADR-009 | Secrets Management | SOPS + Age | Git-friendly encryption, no vault needed |
-| ADR-010 | Native VLAN | VLAN 1 blackholed | Anti-VLAN hopping (Cisco best practice) |
-
----
-
-## 🗺️ Project Phases
+## 🗺️ Architecture
 
 ```
-✅  Phase 0   — Architecture & Planning
-✅  Phase 1   — Local Software Preparation (all docker-compose files)
-🔄  Phase 1.5 — GitHub Setup & LinkedIn Launch          ← YOU ARE HERE
-⬜  Phase 2   — Physical Network & OPNsense
-⬜  Phase 3   — Proxmox Cluster (3-node HA)
-⬜  Phase 4   — Services Deployment
-⬜  Phase 5   — Security, SOC & Hardening
+Internet
+  │  (double-NAT temporaire → WireGuard / Cloudflare Tunnel)
+OPNsense (bare metal)  — pare-feu, VLANs, DHCP/DNS, WireGuard, DDNS
+  │
+Cisco 3560X  — switching L2/L3, SPAN → Security Onion
+  │
+┌───────────────────────────────────────────────┐
+│ Cluster Proxmox « yapserver » (3 nœuds, HA)     │
+│  pve1 / pve2 / pve3                             │
+│                                                 │
+│  VM 200  TrueNAS SCALE  (stockage ZFS, NFS)     │
+│  VM 101  infra          (Traefik, Authentik…)   │
+│  VM 102  monitoring     (Prometheus, Grafana…)  │
+│  VM 103  cloud          (Nextcloud, Immich…)    │
+│  VM 104  media          (Jellyfin, *arr…)       │
+│  VM 105  security       (Wazuh — SIEM/HIDS)     │
+│  VM 106  scanner        (OpenVAS / Greenbone)   │
+│  VM 107  firefly        (Firefly III)           │
+│  VM 108  osint          (SpiderFoot)            │
+└───────────────────────────────────────────────┘
+  │
+Security Onion (bare metal)  — NIDS/NSM (Suricata + Zeek + Elastic) via SPAN
 ```
+
+Reverse proxy unique : **Traefik**. Tous les services internes sont accessibles en `*.yapserver.fr` (DNS interne Unbound en split-DNS) derrière des certificats Let's Encrypt wildcard (DNS-challenge Cloudflare).
 
 ---
 
-## 📁 Repository Structure
+## 🔌 Réseau (VLANs)
+
+| VLAN | Rôle | Subnet |
+|---|---|---|
+| 10 | Management | 10.0.10.0/24 |
+| 20 | Corosync | 10.0.20.0/24 |
+| 30 | Production | 10.0.30.0/24 |
+| 40 | DMZ | 10.0.40.0/24 |
+| 50 | SOC | 10.0.50.0/24 |
+| 60 | Storage | 10.0.60.0/24 |
+| 70 | IoT | 10.0.70.0/24 |
+| 80 | Guest | 10.0.80.0/24 |
+| 90 | Gaming | 10.0.90.0/24 |
+| 100 | Admin | 10.0.100.0/24 |
+| 200 | WireGuard | 10.0.200.0/24 |
+
+Segmentation appliquée au pare-feu (OPNsense) : Production/Storage resserrés (DNS/NTP/NFS + sortie Internet seulement, latéral RFC1918 **bloqué + loggé**).
+
+---
+
+## 🧰 Stack technique
+
+**Infrastructure** — Proxmox VE (cluster 3 nœuds, HA), TrueNAS SCALE (ZFS, NFS), Debian 12 (VMs cloud-init), Docker + Docker Compose.
+
+**Réseau & accès** — OPNsense (VLANs, Kea DHCP, Unbound split-DNS, WireGuard, DDNS Cloudflare), Cisco 3560X (SPAN), Traefik (reverse proxy unique) + CrowdSec, Authentik (SSO), Let's Encrypt wildcard.
+
+**Services** — Nextcloud, Immich, Vaultwarden, Jellyfin + stack *arr, Firefly III, Homarr, NetBox.
+
+**Observabilité** — Prometheus, Grafana, Loki/Promtail, cAdvisor, Node Exporter, Jellystat.
+
+**Sécurité** — Security Onion (NIDS/NSM), Wazuh (SIEM/HIDS), OpenVAS/Greenbone (scan de vulnérabilités), SpiderFoot (OSINT), règles **Sigma** (detection-as-code).
+
+---
+
+## 📦 Services par VM (VLAN 30)
+
+| VM | IP | Services |
+|---|---|---|
+| infra | 10.0.30.10 | Traefik + CrowdSec, Authentik, Homarr, cloudflared |
+| monitoring | 10.0.30.11 | Prometheus, Grafana, Loki, cAdvisor, **NetBox** |
+| cloud | 10.0.30.12 | Vaultwarden, Nextcloud, Immich |
+| media | 10.0.30.13 | Jellyfin, Radarr/Sonarr/Prowlarr, qBittorrent, **Jellystat** |
+| security | 10.0.30.14 | **Wazuh** (manager + indexer + dashboard) |
+| scanner | 10.0.30.15 | **OpenVAS / Greenbone Community** |
+| firefly | 10.0.30.16 | **Firefly III** + Data Importer |
+| osint | 10.0.30.17 | **SpiderFoot** |
+| TrueNAS | 10.0.60.10 | NAS (pools `tank` + `media`) |
+
+---
+
+## 🛡️ Sécurité & Detection Engineering
+
+Le cœur « portfolio » du projet : un cycle de détection complet, couvrant le **réseau** et l'**hôte**, mappé sur **MITRE ATT&CK**, et géré en **detection-as-code**.
+
+### Détection réseau — Security Onion (NSM)
+- **Suricata** (NIDS) + **Zeek** (métadonnées) alimentés par le **SPAN** du Cisco 3560X.
+- Règles NIDS personnalisées (déclenchement/validation : marqueur ICMP custom, scan `nmap` → **T1046**).
+- **Règles Sigma** déployées via **ElastAlert 2** (signature vs comportement), versionnées dans [`detections/sigma/`](detections/sigma/).
+
+### Détection hôte — Wazuh (SIEM / HIDS)
+- Agents sur l'ensemble des VMs et des nœuds Proxmox.
+- **FIM** (whodata sur `/etc`, `.ssh`), **SCA** (durcissement CIS), **rootcheck**, intégration **VirusTotal**.
+- **Règles de corrélation personnalisées** (escalade contextuelle d'un brute-force SSH selon le VLAN source — **T1110**) — voir [`services/security/wazuh/local_rules.xml`](services/security/wazuh/local_rules.xml).
+- **Tuning du bruit** documenté : downgrade ciblé des faux positifs (promiscuous mode Docker, VirusTotal « no records », sessions PAM, rootcheck génériques) — ~68 % d'alertes en moins, sans perte de signal.
+
+### Defense in depth — l'angle mort est-ouest
+Démonstration A/B clé : le trafic **intra-nœud** (VMs co-localisées sur le même hyperviseur) ne traverse jamais le switch physique → **invisible au SPAN**. La couche **agent (Wazuh)** couvre cet angle mort → illustration concrète de la défense en profondeur.
+
+### Scan de vulnérabilités
+- **OpenVAS / Greenbone Community** (VM dédiée) — scans planifiés, triage basé sur le risque réel (≠ CVSS brut).
+
+---
+
+## 🗂️ Structure du dépôt
 
 ```
 homelab/
-├── docs/                    # Architecture docs, network diagrams, runbooks
-├── infrastructure/
-│   ├── network/             # OPNsense exports, Cisco IOS configs
-│   ├── proxmox/             # Cloud-init templates, provisioning scripts
-│   └── ansible/             # Automation playbooks (Phase 4+)
+├── README.md
+├── .gitignore                 # secrets/volumes jamais versionnés
+├── infrastructure/            # docs & procédures (TrueNAS↔Proxmox, …)
 ├── services/
-│   ├── infra/               # traefik · authentik · homarr · netbox
-│   ├── media/               # jellyfin · radarr · sonarr · prowlarr
-│   ├── cloud/               # nextcloud · immich
-│   ├── security/            # step-ca · wazuh · openvas
-│   └── gaming/              # sunshine
-└── portfolio/               # Docusaurus site (this site: yapserver.fr)
+│   ├── infra/                 # traefik (+ dynamic/), authentik, homarr, cloudflared
+│   ├── monitoring/            # prometheus, grafana, loki, … + netbox/
+│   ├── cloud/                 # vaultwarden, nextcloud, immich
+│   ├── media/                 # jellyfin, *arr, qbittorrent + jellystat/
+│   ├── security/wazuh/        # local_rules.xml + agent.conf (travail de détection)
+│   ├── scanner/openvas/       # greenbone community containers
+│   ├── firefly/               # firefly III + data-importer
+│   └── osint/                 # spiderfoot
+├── detections/
+│   └── sigma/                 # règles Sigma (detection-as-code)
+└── portfolio/                 # site Docusaurus (yapserver.fr)
 ```
 
 ---
 
-## 📚 Follow the Journey
+## 🔐 Modèle d'accès & posture de sécurité
 
-Weekly posts on **[LinkedIn](https://linkedin.com/in/VOTRE_PROFIL)** covering:
-- Phase completions with architecture decisions
-- Problems encountered and how I solved them
-- Technical deep-dives on specific components
-- Before/after comparisons
-
-Full technical documentation on **[yapserver.fr](https://yapserver.fr)**
+- **Public par exception** (Cloudflare Tunnel) : seuls Jellyfin, Nextcloud, Immich sont exposés, avec leur auth native (mots de passe forts + 2FA). Tout le reste est **VPN-only** (`internal-only` côté Traefik).
+- **WireGuard** pour l'accès distant ; **CrowdSec** en bouncer côté edge ; **Authentik** pour le SSO.
+- **SSH par clé uniquement** (aucun mot de passe).
+- **Aucun secret versionné** : `.env`, clés, PEM et certificats sont exclus par `.gitignore` ; les configurations publiées utilisent des placeholders (ex. `${CROWDSEC_BOUNCER_API_KEY}`).
 
 ---
 
-<div align="center">
+## 🚦 État
 
-*Built from scratch — no cloud, no managed services, no shortcuts.*
+✅ Cluster Proxmox + HA · Réseau segmenté · TrueNAS/NFS · Reverse proxy + SSO · Cloud/médias · Monitoring · **SOC (Security Onion + Wazuh + agents)** · **Scan de vulnérabilités** · **Detection-as-code (Sigma)** · OSINT · Finances perso.
 
-**[⭐ Star this repo](https://github.com/yapcyber/homelab)** if you find it useful
+🔜 Cloudflare Tunnel · IA locale (Ollama) · pipeline CV · MISP / TheHive / Velociraptor · mail interne (post-migration FAI).
 
-</div>
+---
+
+*Homelab personnel — documenté à des fins d'apprentissage et de portfolio. Les adresses internes (RFC1918) ne sont pas routables depuis Internet.*
