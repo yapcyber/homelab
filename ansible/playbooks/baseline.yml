@@ -1,0 +1,5 @@
+---
+- name: Baseline MAJ auto (sécurité) sur les VM de service
+  hosts: services
+  roles:
+    - unattended_upgrades
