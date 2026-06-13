@@ -63,9 +63,26 @@ Thumbs.db
 # ANSIBLE
 # -----------------------------------------------------------------------------
 # Le fichier hosts contient des IPs et noms d'hôtes réels
+ansible/.vault_pass
 infrastructure/ansible/inventory/hosts
 infrastructure/ansible/inventory/*.ini
 *.retry
+
+# -----------------------------------------------------------------------------
+# OPENTOFU / TERRAFORM
+# -----------------------------------------------------------------------------
+# OpenTofu / Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
+
+# -----------------------------------------------------------------------------
+# PACKER
+# -----------------------------------------------------------------------------
+packer/**/*.auto.pkrvars.hcl
+
 
 # -----------------------------------------------------------------------------
 # CERTIFICATES (générés par Step-CA — stocker hors Git)
