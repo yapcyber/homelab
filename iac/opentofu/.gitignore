@@ -1,0 +1,7 @@
+# Secrets et state - JAMAIS commites
+secrets.auto.tfvars
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
