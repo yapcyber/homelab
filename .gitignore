@@ -95,3 +95,8 @@ pki/
 
 # Donnees runtime des services — jamais dans git
 **/data/
+
+# Runtime stacks media
+services/media/*/config/
+services/media/jellyfin/cache/
+*.swp
