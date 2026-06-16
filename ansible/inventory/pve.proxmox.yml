@@ -1,0 +1,37 @@
+plugin: community.proxmox.proxmox
+url: https://10.0.10.10:8006
+user: ansible-ro@pve
+token_id: inventory
+token_secret: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          32656161333337326132646262346262613637636334303164383166616661353265303361356565
+          3233333163363665643433326632373438373335396239640a313265636666373533633932353638
+          62313939346434623263333062653433343466666530353163356230653233623930323466646662
+          3935363233316262610a326538643531633938386233653931303634613836643135303532646338
+          39393139366237643263323064386466313365313835373834653539663831643836353533616432
+          3461663765383536666530636163316636326235313062383365
+
+validate_certs: false
+
+want_facts: true
+
+# Exclut les templates de l'inventaire géré
+filters:
+  - proxmox_template == false
+
+keyed_groups:
+  - key: proxmox_tags_parsed
+    separator: "_"
+    prefix: tag
+  - key: proxmox_status
+    separator: "_"
+    prefix: status
+
+compose:
+  ansible_host: >-
+    proxmox_agent_interfaces
+    | map(attribute='ip-addresses') | flatten
+    | select('match', '^10\.')
+    | map('regex_replace', '/.*$', '')
+    | first
+  ansible_user: proxmox_ciuser
