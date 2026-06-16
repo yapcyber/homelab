@@ -92,3 +92,6 @@ packer/**/*.auto.pkrvars.hcl
 certs/
 pki/
 *.auto.pkrvars.hcl
+
+# Donnees runtime des services — jamais dans git
+**/data/
