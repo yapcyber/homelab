@@ -1,0 +1,14 @@
+---
+- name: Poster une annotation dans Grafana
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/annotations"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ grafana_annotation_token }}"
+    body_format: json
+    body:
+      tags: "{{ annotation_tags }}"
+      text: "{{ annotation_text }}"
+    status_code: 200
+  delegate_to: localhost
+  become: false

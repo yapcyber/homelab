@@ -1,0 +1,111 @@
+---
+# ───────── Play 1 : VM de service ─────────
+- name: Patch des VM de service
+  hosts: services
+  serial: 2
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    NEEDRESTART_MODE: a
+  tasks:
+    - name: Mettre à jour le cache APT
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Full-upgrade (holds respectés)
+      ansible.builtin.apt:
+        upgrade: full
+        dpkg_options: 'force-confdef,force-confold'
+      register: upgrade_result
+
+    - name: Nettoyer les dépendances obsolètes
+      ansible.builtin.apt:
+        autoremove: true
+
+    - name: Noyau en cours d'exécution
+      ansible.builtin.command: uname -r
+      register: kernel_running
+      changed_when: false
+
+    - name: Dernier noyau installé
+      ansible.builtin.shell: |
+        set -o pipefail
+        ls -1 /boot/vmlinuz-* | sed 's#.*/vmlinuz-##' | sort -V | tail -n1
+      args:
+        executable: /bin/bash
+      register: kernel_latest
+      changed_when: false
+
+    - name: Reboot si le noyau a été mis à jour
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+        msg: "Reboot post-patch Ansible"
+      when: kernel_running.stdout != kernel_latest.stdout
+
+    - name: Journal des changements (annotation Grafana)
+      ansible.builtin.include_role:
+        name: grafana_annotation
+      vars:
+        annotation_text: "MàJ appliquée : {{ inventory_hostname }}"
+        annotation_tags: ['ansible', 'patch', "host:{{ inventory_hostname }}"]
+      when: upgrade_result is changed
+
+# ───────── Play 2 : nœuds Proxmox ─────────
+- name: Patch des nœuds Proxmox
+  hosts: proxmox
+  serial: 1
+  any_errors_fatal: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    NEEDRESTART_MODE: a
+  tasks:
+    - name: Mettre à jour le cache APT
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Dist-upgrade (recommandé Proxmox ; holds respectés)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+      register: upgrade_result
+
+    - name: Nettoyer les dépendances obsolètes
+      ansible.builtin.apt:
+        autoremove: true
+
+    - name: Noyau en cours d'exécution
+      ansible.builtin.command: uname -r
+      register: kernel_running
+      changed_when: false
+
+    - name: Dernier noyau installé
+      ansible.builtin.shell: |
+        set -o pipefail
+        ls -1 /boot/vmlinuz-* | sed 's#.*/vmlinuz-##' | sort -V | tail -n1
+      args:
+        executable: /bin/bash
+      register: kernel_latest
+      changed_when: false
+
+    - name: Reboot si le noyau a été mis à jour
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+        msg: "Reboot post-patch Ansible"
+      when: kernel_running.stdout != kernel_latest.stdout
+
+    - name: Attendre que le nœud rejoigne le cluster (quorum)
+      ansible.builtin.command: pvecm status
+      register: pvecm_status
+      until: pvecm_status.stdout is search('Quorate:\s+Yes')
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Journal des changements (annotation Grafana)
+      ansible.builtin.include_role:
+        name: grafana_annotation
+      vars:
+        annotation_text: "MàJ appliquée : {{ inventory_hostname }}"
+        annotation_tags: ['ansible', 'patch', "host:{{ inventory_hostname }}"]
+      when: upgrade_result is changed

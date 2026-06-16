@@ -1,0 +1,11 @@
+---
+- name: Test annotation Grafana
+  hosts: infra
+  gather_facts: false
+  tasks:
+    - name: Annotation de test
+      ansible.builtin.include_role:
+        name: grafana_annotation
+      vars:
+        annotation_text: "Test annotation depuis Ansible"
+        annotation_tags: ['ansible', 'test']

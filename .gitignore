@@ -91,3 +91,4 @@ packer/**/*.auto.pkrvars.hcl
 *.cert
 certs/
 pki/
+*.auto.pkrvars.hcl

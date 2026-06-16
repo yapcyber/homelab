@@ -1,0 +1,30 @@
+---
+- name: Dépôts Proxmox sans abonnement (no-subscription)
+  hosts: proxmox
+  tasks:
+    - name: Désactiver les dépôts entreprise (401 sans abonnement)
+      ansible.builtin.lineinfile:
+        path: "{{ item }}"
+        regexp: '^Enabled:'
+        line: 'Enabled: false'
+        state: present
+      loop:
+        - /etc/apt/sources.list.d/pve-enterprise.sources
+        - /etc/apt/sources.list.d/ceph.sources
+
+    - name: Activer le dépôt PVE no-subscription
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/pve-no-subscription.sources
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          Types: deb
+          URIs: http://download.proxmox.com/debian/pve
+          Suites: trixie
+          Components: pve-no-subscription
+          Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+
+    - name: Rafraîchir le cache APT
+      ansible.builtin.apt:
+        update_cache: true
