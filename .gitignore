@@ -100,3 +100,6 @@ pki/
 services/media/*/config/
 services/media/jellyfin/cache/
 *.swp
+
+# Secrets d env
+**/.env
