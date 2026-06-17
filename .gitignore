@@ -108,3 +108,11 @@ services/media/jellyfin/cache/
 services/osint/spiderfoot/
 services/osint/maigret/profiles.txt
 services/osint/maigret/reports/
+
+# netbox : seulement les .example (jamais le vrai override ni les vrais env)
+services/monitoring/netbox/docker-compose.override.yml
+services/monitoring/netbox/env/*.env
+
+# netbox : seulement les .example (jamais le vrai override ni les vrais env)
+services/monitoring/netbox/docker-compose.override.yml
+services/monitoring/netbox/env/*.env
