@@ -1,0 +1,11 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 6am on monday"],
+  "ignorePaths": [
+    "services/scanner/**",
+    "services/monitoring/netbox/**",
+    "services/osint/**"
+  ]
+}
