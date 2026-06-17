@@ -1,0 +1,8 @@
+[Unit]
+Description=Maigret OSINT scan (profils famille)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/debian/osint/maigret/maigret-scan.sh

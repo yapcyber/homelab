@@ -1,0 +1,5 @@
+# Un membre par ligne :  NomMembre;pseudo1;pseudo2;...
+# Lignes vides et lignes commencant par # ignorees.
+# Le vrai profiles.txt (pseudos reels) n'est JAMAIS committe.
+Alice;alice_example;alice.exemple
+Bob;bob_example;b0b.exemple
