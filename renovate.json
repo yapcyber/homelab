@@ -3,9 +3,23 @@
   "extends": ["config:recommended", ":dependencyDashboard"],
   "timezone": "Europe/Paris",
   "schedule": ["before 6am on monday"],
+  "labels": ["renovate"],
   "ignorePaths": [
     "services/scanner/**",
     "services/monitoring/netbox/**",
     "services/osint/**"
+  ],
+  "packageRules": [
+    {
+      "description": "Toutes les MAJEURES: opt-in manuel via le Dependency Dashboard, jamais ouvertes automatiquement",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Nextcloud: jamais de saut de majeure auto (upgrade une majeure a la fois, a la main)",
+      "matchPackageNames": ["nextcloud"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
   ]
 }
