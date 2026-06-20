@@ -161,8 +161,7 @@ services:
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
 
     volumes:
-      - ./data/media:/media               # Avatars, branding personnalisé
-      - ./data/custom-templates:/templates # Templates email/page personnalisés
+      - ./data/authentik:/data
 
     networks:
       - traefik-proxy
@@ -239,8 +238,7 @@ services:
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM:-authentik@yapserver.fr}
 
     volumes:
-      - ./data/media:/media
-      - ./data/custom-templates:/templates
+      - ./data/authentik:/data
 
     networks:
       - authentik-internal   # Pas de traefik-proxy : le worker n'a aucun trafic entrant
