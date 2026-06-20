@@ -1,9 +1,36 @@
 services:
 
+  gluetun:
+    image: qmcgaw/gluetun:v3.41.1
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=nordvpn
+      - VPN_TYPE=openvpn
+      - SERVER_COUNTRIES=Netherlands
+      - TZ=Europe/Paris
+      - FIREWALL_OUTBOUND_SUBNETS=10.0.30.0/24
+    env_file:
+      - .env
+    volumes:
+      - ./config/gluetun:/gluetun
+    ports:
+      - "8080:8080"          # WebUI qBittorrent (publiee ici car qbt partage la netns de gluetun)
+    networks:
+      - traefik-proxy
+
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:5.2.1_v2.0.12-ls459
     container_name: qbittorrent
     restart: unless-stopped
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
     environment:
       - PUID=1000
       - PGID=1000
@@ -12,12 +39,6 @@ services:
     volumes:
       - ./config/qbittorrent:/config
       - /mnt/jellyfin/downloads:/downloads
-    ports:
-      - "8080:8080"
-      - "6881:6881"
-      - "6881:6881/udp"
-    networks:
-      - traefik-proxy
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:2.3.5.5327-ls147
