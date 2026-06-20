@@ -116,3 +116,4 @@ services/monitoring/netbox/env/*.env
 # netbox : seulement les .example (jamais le vrai override ni les vrais env)
 services/monitoring/netbox/docker-compose.override.yml
 services/monitoring/netbox/env/*.env
+services/infra/traefik/dynamic/secrets/

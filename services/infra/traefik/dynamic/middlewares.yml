@@ -44,7 +44,7 @@ http:
         crowdsec-bouncer:
           crowdsecLapiScheme: http
           crowdsecLapiHost: crowdsec:8080
-          crowdsecLapikey: "${CROWDSEC_BOUNCER_API_KEY}"
+          crowdsecLapiKeyFile: "/etc/traefik/dynamic/secrets/crowdsec_lapikey"
           crowdsecMode: stream
           updateIntervalSeconds: 60    # Fréquence de sync des décisions
           defaultDecisionSeconds: 60   # Durée de blocage si LAPI injoignable
