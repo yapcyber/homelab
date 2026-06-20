@@ -162,6 +162,7 @@ services:
 
     volumes:
       - ./data/authentik:/data
+      - ./blueprints:/blueprints/custom
 
     networks:
       - traefik-proxy
@@ -239,6 +240,7 @@ services:
 
     volumes:
       - ./data/authentik:/data
+      - ./blueprints:/blueprints/custom
 
     networks:
       - authentik-internal   # Pas de traefik-proxy : le worker n'a aucun trafic entrant
