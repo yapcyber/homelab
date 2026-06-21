@@ -1,0 +1,92 @@
+# =============================================================================
+# 20-enrollment.yaml — Flow d'enrollment sur invitation (Phase A3a)
+# =============================================================================
+# Un proche reçoit un lien d'invitation -> il définit lui-meme identifiant, nom,
+# email et MOT DE PASSE -> compte cree + ajoute au groupe `family`.
+# Aucun mot de passe ne transite par un fichier.
+# Sans invitation valide -> acces refuse (continue_flow_without_invitation: false).
+# Les invitations (PII potentielle) se creent a l'execution (UI/API), jamais dans le repo.
+# MFA : ajoute en A3b une fois ce flow valide.
+# =============================================================================
+version: 1
+metadata:
+  name: homelab-enrollment
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+  # --- Flow ---
+  - id: flow
+    model: authentik_flows.flow
+    identifiers:
+      slug: homelab-enrollment
+    attrs:
+      name: homelab-enrollment
+      title: "Bienvenue sur yapserver.fr"
+      designation: enrollment
+      authentication: require_unauthenticated
+
+  # --- Champs de prompt ---
+  - id: f-name
+    model: authentik_stages_prompt.prompt
+    identifiers: { name: homelab-enrollment-field-name }
+    attrs: { field_key: name, label: "Nom complet", type: text, required: true, placeholder: "Nom complet", order: 0 }
+  - id: f-email
+    model: authentik_stages_prompt.prompt
+    identifiers: { name: homelab-enrollment-field-email }
+    attrs: { field_key: email, label: "Email", type: email, required: true, placeholder: "Email", order: 1 }
+  - id: f-username
+    model: authentik_stages_prompt.prompt
+    identifiers: { name: homelab-enrollment-field-username }
+    attrs: { field_key: username, label: "Identifiant", type: username, required: true, placeholder: "Identifiant", order: 0 }
+  - id: f-password
+    model: authentik_stages_prompt.prompt
+    identifiers: { name: homelab-enrollment-field-password }
+    attrs: { field_key: password, label: "Mot de passe", type: password, required: true, placeholder: "Mot de passe", order: 1 }
+  - id: f-password-repeat
+    model: authentik_stages_prompt.prompt
+    identifiers: { name: homelab-enrollment-field-password-repeat }
+    attrs: { field_key: password_repeat, label: "Mot de passe (confirmation)", type: password, required: true, placeholder: "Confirmation", order: 2 }
+
+  # --- Stages de prompt ---
+  - id: stage-identity
+    model: authentik_stages_prompt.promptstage
+    identifiers: { name: homelab-enrollment-prompt-identity }
+    attrs:
+      fields: [ !KeyOf f-name, !KeyOf f-email ]
+  - id: stage-credentials
+    model: authentik_stages_prompt.promptstage
+    identifiers: { name: homelab-enrollment-prompt-credentials }
+    attrs:
+      fields: [ !KeyOf f-username, !KeyOf f-password, !KeyOf f-password-repeat ]
+
+  # --- Stage invitation (gate) ---
+  - id: stage-invitation
+    model: authentik_stages_invitation.invitationstage
+    identifiers: { name: homelab-enrollment-invitation }
+    attrs:
+      continue_flow_without_invitation: false
+
+  # --- User write : cree le compte + ajoute au groupe family ---
+  - id: stage-write
+    model: authentik_stages_user_write.userwritestage
+    identifiers: { name: homelab-enrollment-user-write }
+    attrs:
+      user_creation_mode: always_create
+      create_users_group: !Find [authentik_core.group, [name, family]]
+
+  # --- User login : connecte apres creation ---
+  - id: stage-login
+    model: authentik_stages_user_login.userloginstage
+    identifiers: { name: homelab-enrollment-user-login }
+
+  # --- Bindings (ordre d'execution) ---
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-invitation,  order: 5 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-identity,    order: 10 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-credentials, order: 11 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-write,       order: 20 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-login,       order: 100 }
