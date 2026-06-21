@@ -8,7 +8,19 @@ http:
         certResolver: cloudflare
       middlewares:
         - internal-only@file
+        - authentik@file
       service: grafana-svc
+      priority: 10
+
+    # Route le handshake/callback de l'outpost vers Authentik (obligatoire en single-app)
+    grafana-outpost:
+      rule: "Host(`grafana.yapserver.fr`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      entrypoints:
+        - websecure
+      tls:
+        certResolver: cloudflare
+      service: authentik-outpost-svc
+      priority: 20
 
     prometheus:
       rule: "Host(`prometheus.yapserver.fr`)"
@@ -30,3 +42,8 @@ http:
       loadBalancer:
         servers:
           - url: "http://10.0.30.11:9090"
+
+    authentik-outpost-svc:
+      loadBalancer:
+        servers:
+          - url: "http://authentik-server:9000"
