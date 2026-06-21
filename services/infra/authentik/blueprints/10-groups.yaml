@@ -1,0 +1,30 @@
+# =============================================================================
+# 10-groups.yaml — Modele de groupes SSO (Phase A2)
+# =============================================================================
+# Structure de groupes versionnee (aucune PII -> safe dans le repo public).
+# L'appartenance des UTILISATEURS (PII) est geree a part (invitation + roster
+# hors-repo ou chiffre SOPS — voir Phase A3).
+#
+#   admins  : acces complet, y compris les outils d'admin (forward-auth)
+#   family  : services partages (Jellyfin, Nextcloud, Immich)
+# =============================================================================
+version: 1
+metadata:
+  name: homelab-groups
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+  - model: authentik_core.group
+    identifiers:
+      name: admins
+    state: present
+    attrs:
+      attributes:
+        description: "Administrateurs du homelab — acces complet"
+  - model: authentik_core.group
+    identifiers:
+      name: family
+    state: present
+    attrs:
+      attributes:
+        description: "Famille — services partages"
