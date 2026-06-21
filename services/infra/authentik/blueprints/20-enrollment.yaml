@@ -90,3 +90,12 @@ entries:
     identifiers: { target: !KeyOf flow, stage: !KeyOf stage-write,       order: 20 }
   - model: authentik_flows.flowstagebinding
     identifiers: { target: !KeyOf flow, stage: !KeyOf stage-login,       order: 100 }
+
+  # --- A3b : MFA TOTP impose a l'enrollment (apres creation, avant login) ---
+  - id: stage-totp
+    model: authentik_stages_authenticator_totp.authenticatortotpstage
+    identifiers: { name: homelab-enrollment-totp }
+    attrs:
+      digits: 6
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-totp, order: 30 }
