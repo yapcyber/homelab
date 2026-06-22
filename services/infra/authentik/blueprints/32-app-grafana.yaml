@@ -1,0 +1,33 @@
+# Grafana — proxy provider (forward-auth) + application + restriction au groupe "admins".
+# client_secret + property_mappings omis : auto-gérés par l'embedded outpost, préservés à l'apply.
+version: 1
+metadata:
+  name: app-grafana-proxy
+entries:
+  - id: provider-grafana
+    model: authentik_providers_proxy.proxyprovider
+    identifiers:
+      name: grafana-proxy
+    attrs:
+      name: grafana-proxy
+      mode: forward_single
+      external_host: https://grafana.yapserver.fr
+      client_id: Yh4VfcTNntUKkzv1ggnbGTKl4KcjtdoDEXaDHYWE
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+  - id: app-grafana
+    model: authentik_core.application
+    identifiers:
+      slug: grafana
+    attrs:
+      name: Grafana
+      slug: grafana
+      provider: !KeyOf provider-grafana
+      policy_engine_mode: any
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf app-grafana
+      group: !Find [authentik_core.group, [name, admins]]
+    attrs:
+      order: 1
+      enabled: true

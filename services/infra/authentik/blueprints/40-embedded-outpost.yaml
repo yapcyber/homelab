@@ -1,0 +1,12 @@
+# Embedded outpost — SOURCE UNIQUE des providers forward-auth.
+# Pour ajouter un futur outil en forward-auth, ajoute son proxyprovider à la liste ci-dessous.
+version: 1
+metadata:
+  name: embedded-outpost-providers
+entries:
+  - model: authentik_outposts.outpost
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      providers:
+        - !Find [authentik_providers_proxy.proxyprovider, [name, grafana-proxy]]
