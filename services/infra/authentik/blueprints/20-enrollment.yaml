@@ -1,12 +1,12 @@
 # =============================================================================
-# 20-enrollment.yaml — Flow d'enrollment sur invitation (Phase A3a)
+# 20-enrollment.yaml — Flow d'enrollment sur invitation (Phase A3a + multi-groupes)
 # =============================================================================
-# Un proche reçoit un lien d'invitation -> il définit lui-meme identifiant, nom,
-# email et MOT DE PASSE -> compte cree + ajoute au groupe `family`.
-# Aucun mot de passe ne transite par un fichier.
+# Un proche recoit un lien d'invitation -> il definit lui-meme identifiant, nom,
+# email et MOT DE PASSE -> compte cree + ajoute aux groupes portes par l'invitation.
+# Le groupe n'est PLUS fige a `family` : il est pilote par le champ `groups_to_add`
+# des Custom attributes de l'invitation (ex: [family] ou [admins]).
 # Sans invitation valide -> acces refuse (continue_flow_without_invitation: false).
-# Les invitations (PII potentielle) se creent a l'execution (UI/API), jamais dans le repo.
-# MFA : ajoute en A3b une fois ce flow valide.
+# MFA TOTP impose a l'enrollment ET a chaque login.
 # =============================================================================
 version: 1
 metadata:
@@ -66,18 +66,45 @@ entries:
     attrs:
       continue_flow_without_invitation: false
 
-  # --- User write : cree le compte + ajoute au groupe family ---
+  # --- Expression policy : lit groups_to_add de l'invitation -> pose context["groups"] ---
+  # Fail-closed : un groupe inexistant bloque l'enrollment (pas de user mal range).
+  - id: policy-assign-groups
+    model: authentik_policies_expression.expressionpolicy
+    identifiers: { name: homelab-enrollment-assign-groups }
+    attrs:
+      expression: |
+        from authentik.core.models import Group
+        groups_to_add = request.context.get("prompt_data", {}).get("groups_to_add", [])
+        if not groups_to_add:
+            return True
+        resolved = []
+        for group_name in groups_to_add:
+            try:
+                resolved.append(Group.objects.get(name=group_name))
+            except Group.DoesNotExist:
+                ak_logger.warning(f"Groupe d'invitation introuvable: {group_name}")
+                return False
+        request.context["flow_plan"].context["groups"] = resolved
+        return True
+
+  # --- User write : cree le compte (groupe(s) fournis par la policy ci-dessus) ---
   - id: stage-write
     model: authentik_stages_user_write.userwritestage
     identifiers: { name: homelab-enrollment-user-write }
     attrs:
       user_creation_mode: always_create
-      create_users_group: !Find [authentik_core.group, [name, family]]
 
   # --- User login : connecte apres creation ---
   - id: stage-login
     model: authentik_stages_user_login.userloginstage
     identifiers: { name: homelab-enrollment-user-login }
+
+  # --- A3b : MFA TOTP impose a l'enrollment (apres creation, avant login) ---
+  - id: stage-totp
+    model: authentik_stages_authenticator_totp.authenticatortotpstage
+    identifiers: { name: homelab-enrollment-totp }
+    attrs:
+      digits: 6
 
   # --- Bindings (ordre d'execution) ---
   - model: authentik_flows.flowstagebinding
@@ -86,16 +113,27 @@ entries:
     identifiers: { target: !KeyOf flow, stage: !KeyOf stage-identity,    order: 10 }
   - model: authentik_flows.flowstagebinding
     identifiers: { target: !KeyOf flow, stage: !KeyOf stage-credentials, order: 11 }
-  - model: authentik_flows.flowstagebinding
-    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-write,       order: 20 }
-  - model: authentik_flows.flowstagebinding
-    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-login,       order: 100 }
 
-  # --- A3b : MFA TOTP impose a l'enrollment (apres creation, avant login) ---
-  - id: stage-totp
-    model: authentik_stages_authenticator_totp.authenticatortotpstage
-    identifiers: { name: homelab-enrollment-totp }
+  # --- Binding du user-write : la policy s'evalue JUSTE AVANT l'ecriture ---
+  #   evaluate_on_plan: false  -> ne PAS evaluer au moment du plan (trop tot)
+  #   re_evaluate_policies: true -> re-evaluer juste avant l'execution du stage
+  - id: binding-write
+    model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-write, order: 20 }
     attrs:
-      digits: 6
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+
   - model: authentik_flows.flowstagebinding
-    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-totp, order: 30 }
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-totp,  order: 30 }
+  - model: authentik_flows.flowstagebinding
+    identifiers: { target: !KeyOf flow, stage: !KeyOf stage-login, order: 100 }
+
+  # --- Lie la policy AU binding du user-write (pas au flow directement) ---
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf binding-write
+      policy: !KeyOf policy-assign-groups
+      order: 0
+    attrs:
+      enabled: true
