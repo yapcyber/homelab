@@ -3,7 +3,9 @@ http:
     talk:
       rule: "Host(`talk.yapserver.fr`)"
       entrypoints: [websecure]
-      tls: {certResolver: cloudflare}
+      tls:
+        certResolver: cloudflare
+        options: websocket
       middlewares: [internal-only@file]
       service: talk-svc
 

@@ -65,3 +65,28 @@ tls:
       sniStrict: true
       # Les cipher suites TLS 1.3 sont standardisées et non configurables :
       # TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256
+
+    # =========================================================================
+    # WebSocket — force HTTP/1.1 (ALPN) pour les endpoints wss://
+    # =========================================================================
+    # Le handshake WebSocket (Upgrade:) n'existe PAS en HTTP/2 -> Traefik doit
+    # n'annoncer que http/1.1 en ALPN pour ces routeurs, sinon le navigateur
+    # negocie h2 et l'upgrade echoue en HTTP 400.
+    # Meme durcissement que 'default' + alpnProtocols restreint.
+    # USAGE : sur le routeur, tls.options: websocket
+    # Appliquer sur : Nextcloud Talk (signaling wss://talk.yapserver.fr/spreed)
+    websocket:
+      minVersion: VersionTLS12
+      sniStrict: true
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+      curvePreferences:
+        - CurveP521
+        - CurveP384
+      alpnProtocols:
+        - http/1.1
