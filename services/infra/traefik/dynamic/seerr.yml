@@ -1,0 +1,14 @@
+http:
+  routers:
+    seerr:
+      rule: "Host(`seerr.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: seerr-svc
+
+  services:
+    seerr-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:5055"
