@@ -1,0 +1,31 @@
+# =============================================================================
+# services/infra/talk-hpb/docker-compose.yml
+# Nextcloud Talk — High Performance Backend (signaling + Janus + TURN)
+# Image AIO officielle. Co-localise avec Traefik (VM infra).
+#   - Signaling (8081) : routé par Traefik via le reseau traefik-proxy (talk.yapserver.fr)
+#   - TURN (3478 tcp+udp) : publié sur l'hote, joignable en VPN-only (regle OPNsense WG->.10:3478)
+# TALK_HOST doit resoudre vers 10.0.30.10 (override Unbound).
+# Secrets dans .env (gitignore).
+# =============================================================================
+services:
+  talk-hpb:
+    image: ghcr.io/nextcloud-releases/aio-talk:latest   # TODO backlog: epingler (comme traefik)
+    container_name: nextcloud-talk-hpb
+    restart: unless-stopped
+    environment:
+      - NC_DOMAIN=cloud.yapserver.fr
+      - TALK_HOST=talk.yapserver.fr
+      - TALK_PORT=3478
+      - TURN_SECRET=${TURN_SECRET}
+      - SIGNALING_SECRET=${SIGNALING_SECRET}
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy
