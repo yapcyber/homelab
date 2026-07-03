@@ -1,0 +1,14 @@
+http:
+  routers:
+    talk:
+      rule: "Host(`talk.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: talk-svc
+
+  services:
+    talk-svc:
+      loadBalancer:
+        servers:
+          - url: "http://nextcloud-talk-hpb:8081"
