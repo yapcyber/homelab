@@ -1,34 +1,10 @@
 # =============================================================================
 # services/cloud/nextcloud/docker-compose.yml
-# Phase 1.2 — Nextcloud (Cloud personnel)
+# Nextcloud 34 (Cloud personnel + Talk) — réinstallation propre
 # =============================================================================
-#
-# RÔLE : Alternative self-hosted à Google Drive / OneDrive.
-#   Fichiers, contacts, calendriers, notes, partage de liens.
-#   Accessible depuis l'extérieur (famille, mobile, desktop via app native).
-#
-# ARCHITECTURE :
-#
-#   ┌─────────────────────────────────────────────┐
-#   │  traefik-proxy                              │
-#   │   ┌──────────────────────────────────┐      │
-#   │   │  nextcloud (Apache + PHP)        │◄─────┤── HTTPS depuis internet
-#   │   │  nextcloud-cron (tâches fond)    │      │
-#   │   └───────────────┬──────────────────┘      │
-#   └───────────────────│─────────────────────────┘
-#                       │
-#   ┌───────────────────│─────────────────────────┐
-#   │  nextcloud-internal (interne, isolé)         │
-#   │   ┌───────────────┴──────┐  ┌────────────┐  │
-#   │   │  nextcloud-postgres  │  │   redis    │  │
-#   │   └──────────────────────┘  └────────────┘  │
-#   └─────────────────────────────────────────────┘
-#
-# POINT CRITIQUE — Nextcloud derrière un reverse proxy :
-#   Sans les variables OVERWRITE*, Nextcloud génère des URLs en http://
-#   qui cassent les clients desktop/mobile et tous les partages de liens.
-#   Les variables TRUSTED_PROXIES sont nécessaires pour que Nextcloud
-#   fasse confiance aux headers X-Forwarded-* envoyés par Traefik.
+# Derrière Traefik : OVERWRITE* + TRUSTED_PROXIES obligatoires (URLs https,
+# clients desktop/mobile, partages de liens).
+# Talk (spreed) installé cote app apres montee ; HPB deploye separement.
 # =============================================================================
 
 services:
@@ -55,7 +31,7 @@ services:
       - nextcloud-internal
 
   nextcloud:
-    image: nextcloud:29
+    image: nextcloud:34.0.1-apache
     container_name: nextcloud
     restart: unless-stopped
     environment:
@@ -68,6 +44,8 @@ services:
       - NEXTCLOUD_ADMIN_USER=admin
       - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
       - NEXTCLOUD_TRUSTED_DOMAINS=cloud.yapserver.fr
+      - TRUSTED_PROXIES=10.0.30.10
+      - OVERWRITEHOST=cloud.yapserver.fr
       - OVERWRITEPROTOCOL=https
       - OVERWRITECLIURL=https://cloud.yapserver.fr
     volumes:
@@ -80,6 +58,19 @@ services:
     networks:
       - nextcloud-internal
       - traefik-proxy
+
+  nextcloud-cron:
+    image: nextcloud:34.0.1-apache
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    volumes:
+      - nextcloud-data:/var/www/html
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis
+    networks:
+      - nextcloud-internal
 
 volumes:
   db-data:
