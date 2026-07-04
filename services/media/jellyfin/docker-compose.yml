@@ -9,6 +9,12 @@ services:
       - ./config:/config
       - ./cache:/cache
       - /mnt/jellyfin:/media:ro
+      - type: bind
+        source: /mnt/films
+        target: /mnt/films
+        read_only: true
+        bind:
+          propagation: rslave
     ports:
       - "8096:8096"
     networks:
