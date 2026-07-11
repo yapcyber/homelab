@@ -6,7 +6,7 @@
 # =============================================================================
 services:
   lidarr:
-    image: lscr.io/linuxserver/lidarr:2.12.4.4492-ls35
+    image: lscr.io/linuxserver/lidarr:3.1.0.4875-ls34
     container_name: lidarr
     restart: unless-stopped
     environment:
