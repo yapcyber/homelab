@@ -1,0 +1,28 @@
+# =============================================================================
+# services/media/lidarr/docker-compose.yml
+# Lidarr — gestionnaire de bibliothèque musicale (comme Sonarr pour la musique)
+# Branché sur Prowlarr (indexers) et qBittorrent (via gluetun, VPN).
+# Bibliothèque : /mnt/jellyfin/music (même NFS que movies/shows).
+# =============================================================================
+services:
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:2.12.4.4492-ls35
+    container_name: lidarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+    volumes:
+      - ./config:/config
+      - /mnt/jellyfin/music:/music
+      - /mnt/jellyfin/downloads:/downloads
+    ports:
+      - "8686:8686"
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy

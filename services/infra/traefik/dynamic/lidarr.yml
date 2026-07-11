@@ -1,0 +1,14 @@
+http:
+  routers:
+    lidarr:
+      rule: "Host(`lidarr.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: lidarr-svc
+
+  services:
+    lidarr-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:8686"

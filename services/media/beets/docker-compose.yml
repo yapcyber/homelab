@@ -1,0 +1,27 @@
+# =============================================================================
+# services/media/beets/docker-compose.yml
+# Beets — normalisation et tagging des métadonnées musicales.
+# Appelé par Lidarr via un script post-import (Custom Script dans Lidarr UI).
+# Mode : one-shot sur déclenchement, pas de daemon permanent.
+# Sources de métadonnées : MusicBrainz (par défaut) + AcousticBrainz.
+# =============================================================================
+services:
+  beets:
+    image: lscr.io/linuxserver/beets:2.3.1-ls109
+    container_name: beets
+    restart: "no"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+    volumes:
+      - ./config:/config
+      - /mnt/jellyfin/music:/music
+      - /mnt/jellyfin/downloads:/downloads
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy

@@ -1,0 +1,31 @@
+# =============================================================================
+# services/media/navidrome/docker-compose.yml
+# Navidrome — serveur de streaming musical (API Subsonic/OpenSubsonic)
+# Compatible : DSub, Symfonium, Ultrasonic (mobile) ; Sublime Music (desktop) ;
+#              Substreamer, Feishin (web/desktop) ; Supersonic (TV via Android).
+# Bibliothèque partagée en lecture seule avec Lidarr : /mnt/jellyfin/music.
+# =============================================================================
+services:
+  navidrome:
+    image: deluan/navidrome:0.54.5
+    container_name: navidrome
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      - ND_SCANSCHEDULE=@every 1h
+      - ND_LOGLEVEL=info
+      - ND_SESSIONTIMEOUT=24h
+      - ND_BASEURL=
+      - TZ=Europe/Paris
+    volumes:
+      - ./data:/data
+      - /mnt/jellyfin/music:/music:ro
+    ports:
+      - "4533:4533"
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy

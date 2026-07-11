@@ -1,0 +1,14 @@
+http:
+  routers:
+    navidrome:
+      rule: "Host(`music.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: navidrome-svc
+
+  services:
+    navidrome-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:4533"
