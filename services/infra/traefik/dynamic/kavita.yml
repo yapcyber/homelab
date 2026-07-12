@@ -1,0 +1,14 @@
+http:
+  routers:
+    kavita:
+      rule: "Host(`kavita.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: kavita-svc
+
+  services:
+    kavita-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.13:5000"

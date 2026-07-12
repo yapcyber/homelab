@@ -1,0 +1,19 @@
+# =============================================================================
+# services/media/kavita/docker-compose.yml
+# Kavita — serveur de lecture (ebooks, mangas, comics, PDF).
+# Bibliothèque sur le NAS : /mnt/jellyfin/books.
+# NB : le NFS applique root_squash — Kavita (root dans le conteneur) lit la
+# bibliothèque mais ne peut pas y écrire ; la config est sur disque local.
+# =============================================================================
+services:
+  kavita:
+    image: docker.io/jvmilazz0/kavita:0.9.0.2
+    container_name: kavita
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris
+    ports:
+      - "5000:5000"
+    volumes:
+      - /mnt/jellyfin/books:/books
+      - ./config:/kavita/config

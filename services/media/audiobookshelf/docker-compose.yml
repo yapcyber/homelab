@@ -1,0 +1,21 @@
+# =============================================================================
+# services/media/audiobookshelf/docker-compose.yml
+# AudioBookShelf — serveur de livres audio et podcasts.
+# Bibliothèques sur le NAS : /mnt/jellyfin/audiobooks et /mnt/jellyfin/podcasts.
+# Tourne en 1000:1000 (cohérent avec les droits NFS des autres bibliothèques).
+# =============================================================================
+services:
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:2.19.0
+    container_name: audiobookshelf
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      - TZ=Europe/Paris
+    ports:
+      - "13378:80"
+    volumes:
+      - /mnt/jellyfin/audiobooks:/audiobooks
+      - /mnt/jellyfin/podcasts:/podcasts
+      - ./config:/config
+      - ./metadata:/metadata

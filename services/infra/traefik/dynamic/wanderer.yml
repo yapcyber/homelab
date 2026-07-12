@@ -1,0 +1,14 @@
+http:
+  routers:
+    wanderer:
+      rule: "Host(`wanderer.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: wanderer-svc
+
+  services:
+    wanderer-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:3001"
