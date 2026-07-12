@@ -1,0 +1,50 @@
+# =============================================================================
+# services/cloud/splitpro/docker-compose.yml
+# SplitPro — partage de dépenses de groupe (alternative Splitwise).
+# App Next.js + PostgreSQL (image ossapps avec pg_cron requis par SplitPro).
+# Secrets et connexion dans .env (non versionné) — voir .env.example.
+# ⚠️ Connexion : configurer un provider (Authentik OIDC recommandé) dans .env,
+#    sinon aucun login possible (pas de SMTP configuré pour les magic links).
+# =============================================================================
+services:
+  postgres:
+    image: ossapps/postgres:17.7-trixie
+    container_name: splitpro-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:?err}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
+      - POSTGRES_DB=${POSTGRES_DB:?err}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_cron
+      -c cron.database_name=${POSTGRES_DB:-splitpro}
+      -c cron.timezone=UTC
+    env_file: .env
+    volumes:
+      - database:/var/lib/postgresql/data
+
+  splitpro:
+    image: ossapps/splitpro:v2.1.4
+    container_name: splitpro
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+
+volumes:
+  database:
+  uploads:

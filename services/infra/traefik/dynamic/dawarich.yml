@@ -1,0 +1,14 @@
+http:
+  routers:
+    dawarich:
+      rule: "Host(`dawarich.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: dawarich-svc
+
+  services:
+    dawarich-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:3000"
