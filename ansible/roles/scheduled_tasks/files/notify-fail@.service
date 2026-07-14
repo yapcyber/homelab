@@ -1,0 +1,6 @@
+[Unit]
+Description=Alerte ntfy pour l'unité en échec %i
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/homelab-notify-fail %i

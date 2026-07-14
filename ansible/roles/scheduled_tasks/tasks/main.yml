@@ -1,0 +1,85 @@
+---
+# Socle commun : helper d'alerte ntfy + unité d'échec générique
+- name: Helper d'alerte ntfy
+  ansible.builtin.template:
+    src: homelab-alert.j2
+    dest: /usr/local/bin/homelab-alert
+    mode: "0755"
+
+- name: Wrapper de notification d'échec
+  ansible.builtin.copy:
+    src: homelab-notify-fail
+    dest: /usr/local/bin/homelab-notify-fail
+    mode: "0755"
+
+- name: Unité notify-fail@
+  ansible.builtin.copy:
+    src: notify-fail@.service
+    dest: /etc/systemd/system/notify-fail@.service
+    mode: "0644"
+  notify: daemon-reload
+
+# Sauvegardes : clé de chiffrement + jobs
+- name: Clé de chiffrement des sauvegardes (générée une fois, à copier dans Vaultwarden)
+  ansible.builtin.shell: umask 077 && openssl rand -hex 32 > /etc/homelab-backup.key
+  args:
+    creates: /etc/homelab-backup.key
+  when: backup_jobs | length > 0
+
+- name: Répertoire des jobs de sauvegarde
+  ansible.builtin.file:
+    path: /etc/homelab-backup.d
+    state: directory
+    mode: "0750"
+  when: backup_jobs | length > 0
+
+- name: Jobs de sauvegarde
+  ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "/etc/homelab-backup.d/{{ item.key }}.sh"
+    mode: "0640"
+  loop: "{{ backup_jobs | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+# Tâches planifiées : script + service + timer
+- name: Scripts des tâches
+  ansible.builtin.copy:
+    src: "scripts/{{ item.script }}"
+    dest: "/usr/local/sbin/homelab-{{ item.name }}.sh"
+    mode: "0755"
+  loop: "{{ scheduled_tasks }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Unités service
+  ansible.builtin.template:
+    src: task.service.j2
+    dest: "/etc/systemd/system/homelab-{{ item.name }}.service"
+    mode: "0644"
+  loop: "{{ scheduled_tasks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: daemon-reload
+
+- name: Unités timer
+  ansible.builtin.template:
+    src: task.timer.j2
+    dest: "/etc/systemd/system/homelab-{{ item.name }}.timer"
+    mode: "0644"
+  loop: "{{ scheduled_tasks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: daemon-reload
+
+- name: Flush handlers (daemon-reload avant activation)
+  ansible.builtin.meta: flush_handlers
+
+- name: Activation des timers
+  ansible.builtin.systemd:
+    name: "homelab-{{ item.name }}.timer"
+    enabled: true
+    state: started
+  loop: "{{ scheduled_tasks }}"
+  loop_control:
+    label: "{{ item.name }}"

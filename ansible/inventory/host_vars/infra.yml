@@ -1,0 +1,18 @@
+---
+scheduled_tasks:
+  - {name: backup, description: "Sauvegarde quotidienne bases + configs", calendar: "01:30", random_delay: 30m, script: backup.sh}
+  - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
+  - {name: git-drift, description: "Anti-dérive Git quotidien", calendar: "07:00", random_delay: 15m, user: debian, script: git-drift.sh}
+  - {name: cert-expiry, description: "Vérification expiration des certificats", calendar: "08:00", random_delay: 15m, script: cert-expiry.sh}
+
+backup_jobs:
+  10-authentik-db: |
+    docker exec authentik-postgresql sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip | enc > "$DAILY/authentik-db.sql.gz.enc"
+  20-traefik: |
+    tar czf - -C /home/debian/homelab/services/infra traefik/data/acme-cloudflare.json traefik/dynamic traefik/config | enc > "$DAILY/traefik.tar.gz.enc"
+  30-crowdsec: |
+    docker cp -q crowdsec:/etc/crowdsec - | gzip | enc > "$DAILY/crowdsec-etc.tar.gz.enc"
+  40-homarr: |
+    tar czf "$DAILY/homarr.tar.gz" -C /home/debian/homelab/services/infra homarr 2>/dev/null || [ $? -le 1 ]
+  90-envs: |
+    find /home/debian/homelab/services/infra -maxdepth 2 -name ".env" | tar czf - -T - 2>/dev/null | enc > "$DAILY/envs.tar.gz.enc"

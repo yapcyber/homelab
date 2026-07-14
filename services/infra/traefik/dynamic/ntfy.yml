@@ -1,0 +1,14 @@
+http:
+  routers:
+    ntfy:
+      rule: "Host(`ntfy.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      middlewares: [internal-only@file]
+      service: ntfy-svc
+
+  services:
+    ntfy-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.11:8082"

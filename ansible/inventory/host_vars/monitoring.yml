@@ -1,0 +1,10 @@
+---
+scheduled_tasks:
+  - {name: backup, description: "Sauvegarde quotidienne bases + configs", calendar: "01:30", random_delay: 30m, script: backup.sh}
+  - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
+  - {name: git-drift, description: "Anti-dérive Git quotidien", calendar: "07:00", random_delay: 15m, user: debian, script: git-drift.sh}
+  - {name: restore-reminder, description: "Rappel mensuel test de restauration", calendar: "*-*-01 10:00", script: restore-reminder.sh}
+
+backup_jobs:
+  10-grafana: |
+    docker cp -q grafana:/var/lib/grafana - | gzip > "$DAILY/grafana-data.tar.gz"

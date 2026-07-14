@@ -1,0 +1,30 @@
+# =============================================================================
+# services/monitoring/ntfy/docker-compose.yml
+# ntfy — canal d'alerte central du homelab (push mobile + web).
+# Toutes les tâches planifiées (backups, health-checks, dérive git, certs,
+# agents Wazuh, fenêtre de patch) publient sur le topic `homelab`.
+# Accès interne uniquement (Traefik internal-only) ; pas d'auth en v1 —
+# le VLAN + le middleware font le contrôle d'accès.
+# =============================================================================
+services:
+  ntfy:
+    image: binwiederhier/ntfy:v2
+    container_name: ntfy
+    restart: unless-stopped
+    command: serve
+    environment:
+      - TZ=Europe/Paris
+      - NTFY_BASE_URL=https://ntfy.yapserver.fr
+      - NTFY_BEHIND_PROXY=true
+      - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
+      - NTFY_ATTACHMENT_CACHE_DIR=/var/cache/ntfy/attachments
+    ports:
+      - "8082:80"
+    volumes:
+      - ./cache:/var/cache/ntfy
+      - ./config:/etc/ntfy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/v1/health | grep -q '\"healthy\":true'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

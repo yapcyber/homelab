@@ -1,0 +1,23 @@
+---
+scheduled_tasks:
+  - {name: backup, description: "Sauvegarde quotidienne bases + configs", calendar: "01:30", random_delay: 30m, script: backup.sh}
+  - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
+  - {name: git-drift, description: "Anti-dérive Git quotidien", calendar: "07:00", random_delay: 15m, user: debian, script: git-drift.sh}
+
+backup_jobs:
+  10-nextcloud-db: |
+    docker exec nextcloud-db sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$DAILY/nextcloud-db.sql.gz"
+  11-nextcloud-config: |
+    docker cp -q nextcloud:/var/www/html/config - | gzip | enc > "$DAILY/nextcloud-config.tar.gz.enc"
+  20-immich-db: |
+    docker exec immich_postgres sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$DAILY/immich-db.sql.gz"
+  30-vaultwarden: |
+    docker cp -q vaultwarden:/data - | gzip | enc > "$DAILY/vaultwarden-data.tar.gz.enc"
+  40-dawarich-db: |
+    docker exec dawarich_db sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$DAILY/dawarich-db.sql.gz"
+  50-splitpro-db: |
+    docker exec splitpro-db sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$DAILY/splitpro-db.sql.gz"
+  60-wanderer: |
+    tar czf "$DAILY/wanderer-data.tar.gz" -C /home/debian/homelab/services/cloud/wanderer/data pb_data uploads
+  90-envs: |
+    find /home/debian/homelab/services/cloud -maxdepth 2 -name ".env" | tar czf - -T - 2>/dev/null | enc > "$DAILY/envs.tar.gz.enc"

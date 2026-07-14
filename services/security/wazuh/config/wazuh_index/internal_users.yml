@@ -53,7 +53,7 @@ kibanaro:
   description: "Wazuh read-only user"
 
 logstash:
-  hash: "$2y$12$u1ShR4l4uBS3Uv59K3GxE.luf5K0cegpL0WG0/cxwbfv.49jSIvEm"  # CHANGEME
+  hash: "CHANGEME-generate-bcrypt-see-comments"  # CHANGEME
   reserved: false
   backend_roles:
     - "logstash"

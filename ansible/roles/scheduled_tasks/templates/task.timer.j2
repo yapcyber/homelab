@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer — {{ item.description }}
+
+[Timer]
+OnCalendar={{ item.calendar }}
+RandomizedDelaySec={{ item.random_delay | default('10m') }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

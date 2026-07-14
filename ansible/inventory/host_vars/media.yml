@@ -1,0 +1,17 @@
+---
+scheduled_tasks:
+  - {name: backup, description: "Sauvegarde quotidienne bases + configs", calendar: "01:30", random_delay: 30m, script: backup.sh}
+  - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
+  - {name: git-drift, description: "Anti-dérive Git quotidien", calendar: "07:00", random_delay: 15m, user: debian, script: git-drift.sh}
+
+backup_jobs:
+  10-jellystat-db: |
+    docker exec jellystat-jellystat-db-1 sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$DAILY/jellystat-db.sql.gz"
+  20-configs: |
+    tar czf "$DAILY/media-configs.tar.gz" \
+      --exclude='*/cache/*' --exclude='*/Cache/*' --exclude='*/logs/*' \
+      --exclude='*/MediaCover/*' --exclude='homelab/services/media/jellyfin/config/metadata/*' \
+      --exclude='homelab/services/media/audiobookshelf/metadata/cache/*' \
+      -C /home/debian homelab/services/media jellystat 2>/dev/null || [ $? -le 1 ]
+  90-envs: |
+    find /home/debian/homelab/services/media -maxdepth 2 -name ".env" | tar czf - -T - 2>/dev/null | enc > "$DAILY/envs.tar.gz.enc"

@@ -1,0 +1,4 @@
+---
+ntfy_url: "http://10.0.30.11:8082/homelab"
+scheduled_tasks: []
+backup_jobs: {}

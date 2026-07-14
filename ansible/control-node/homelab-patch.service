@@ -1,0 +1,6 @@
+[Unit]
+Description=Fenêtre de patch hebdo (snapshot Proxmox + patch Ansible)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/homelab-patch-window.sh

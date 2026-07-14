@@ -1,0 +1,9 @@
+---
+scheduled_tasks:
+  - {name: backup, description: "Sauvegarde quotidienne configs Wazuh", calendar: "01:30", random_delay: 30m, script: backup.sh}
+  - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
+  - {name: wazuh-agents, description: "Revue quotidienne des agents Wazuh", calendar: "07:30", random_delay: 10m, script: wazuh-agents.sh}
+
+backup_jobs:
+  10-wazuh-etc: |
+    docker cp -q single-node-wazuh.manager-1:/var/ossec/etc - | gzip | enc > "$DAILY/wazuh-etc.tar.gz.enc"

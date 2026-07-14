@@ -1,0 +1,47 @@
+---
+# cron-securite #7 — snapshots pré-patch + purge des anciens.
+# Snapshot "autopatch-YYYYMMDD" (sans vmstate) de toutes les VMs running,
+# purge des snapshots autopatch- de plus de {{ keep_days }} jours.
+- name: Snapshots Proxmox avant fenêtre de patch
+  hosts: proxmox
+  serial: 1
+  vars:
+    snap_prefix: autopatch
+    keep_days: 21
+  tasks:
+    - name: Snapshot des VMs running (best-effort, idempotent pour le jour même)
+      ansible.builtin.shell: |
+        set -u
+        tag="{{ snap_prefix }}-$(date +%Y%m%d)"
+        created=""; skipped=""
+        for vmid in $(qm list | awk 'NR>1 && $3=="running" {print $1}'); do
+          qm listsnapshot "$vmid" | grep -q "$tag" && continue
+          if qm snapshot "$vmid" "$tag" --description "snapshot pré-patch automatique" >/dev/null 2>&1; then
+            created="$created $vmid"
+          else
+            skipped="$skipped $vmid"
+          fi
+        done
+        echo "snapshots créés :${created:- aucun}"
+        [ -n "$skipped" ] && echo "SANS snapshot (storage incompatible ?) :$skipped"
+        true
+      args:
+        executable: /bin/bash
+      register: snap_result
+      changed_when: "'aucun' not in snap_result.stdout_lines[0]"
+
+    - name: Purge des snapshots {{ snap_prefix }}-* de plus de {{ keep_days }} jours
+      ansible.builtin.shell: |
+        set -uo pipefail
+        cutoff=$(date -d "-{{ keep_days }} days" +%Y%m%d)
+        qm list | awk 'NR>1 {print $1}' | while read -r vmid; do
+          qm listsnapshot "$vmid" 2>/dev/null | grep -oP '{{ snap_prefix }}-\K[0-9]{8}' | while read -r d; do
+            if [ "$d" -lt "$cutoff" ]; then
+              qm delsnapshot "$vmid" "{{ snap_prefix }}-$d" || true
+            fi
+          done
+        done
+        true
+      args:
+        executable: /bin/bash
+      changed_when: false

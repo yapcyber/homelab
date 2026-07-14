@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# homelab-alert TITRE MESSAGE [priorité]
+# Publie une notification sur le canal central ntfy (topic homelab).
+# IP directe volontairement : les alertes doivent partir même si
+# Traefik ou le DNS interne sont en panne.
+set -u
+curl -fsS -m 10 \
+  -H "Title: ${1:-alerte}" \
+  -H "Priority: ${3:-default}" \
+  -d "${2:-'(pas de détail)'}" \
+  "{{ ntfy_url }}" >/dev/null

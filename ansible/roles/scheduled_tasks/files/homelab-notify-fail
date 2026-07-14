@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# homelab-notify-fail UNIT — appelé via OnFailure=notify-fail@%n.service
+# Envoie les dernières lignes de journal de l'unité en échec.
+set -u
+unit="${1:?unit manquante}"
+log=$(journalctl -u "$unit" -n 12 --no-pager -o cat 2>/dev/null | tail -c 800)
+/usr/local/bin/homelab-alert "❌ $(hostname) : échec ${unit}" "${log:-aucun log}" high

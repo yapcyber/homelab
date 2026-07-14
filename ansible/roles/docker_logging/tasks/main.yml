@@ -1,0 +1,32 @@
+---
+# cron-securite #8 — plafonds de logs.
+# daemon.json : déposé seulement s'il n'existe pas (pas d'écrasement d'une
+# config existante). PAS de restart du daemon : la config s'appliquera au
+# prochain reboot (fenêtre de patch) et ne concerne que les conteneurs
+# recréés ensuite. Les compose critiques portent déjà leurs log-opts.
+- name: Plafond de logs Docker (si absent)
+  ansible.builtin.copy:
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "50m", "max-file": "3" }
+      }
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    force: false
+  register: daemon_json
+
+- name: Répertoire journald.conf.d
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Plafond journald (200M)
+  ansible.builtin.copy:
+    content: |
+      [Journal]
+      SystemMaxUse=200M
+    dest: /etc/systemd/journald.conf.d/homelab.conf
+    mode: "0644"
+  notify: restart journald

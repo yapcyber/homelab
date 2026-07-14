@@ -1,0 +1,14 @@
+---
+scheduled_tasks:
+  - {name: backup, description: "Sauvegarde quotidienne bases + configs", calendar: "01:30", random_delay: 30m, script: backup.sh}
+  - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
+  - {name: git-drift, description: "Anti-dérive Git quotidien", calendar: "07:00", random_delay: 15m, user: debian, script: git-drift.sh}
+
+backup_jobs:
+  10-firefly-db: |
+    # root password aléatoire (MYSQL_RANDOM_ROOT_PASSWORD) → dump avec les creds applicatifs
+    docker exec firefly-db-1 sh -c 'mariadb-dump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' | gzip > "$DAILY/firefly-db.sql.gz"
+  20-ghostfolio-db: |
+    docker exec gf-postgres sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$DAILY/ghostfolio-db.sql.gz"
+  90-envs: |
+    { find /home/debian/firefly -maxdepth 1 \( -name ".*env*" -o -name "*.pem" \) ; find /home/debian/homelab/services/firefly -maxdepth 2 -name ".env" ; } | tar czf - -T - 2>/dev/null | enc > "$DAILY/envs.tar.gz.enc"

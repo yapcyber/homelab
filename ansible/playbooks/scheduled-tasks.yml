@@ -1,0 +1,8 @@
+---
+# cron-securite — déploie les tâches planifiées (timers systemd) sur le parc.
+# Les tâches de chaque VM sont définies dans inventory/host_vars/<vm>.yml.
+- name: Tâches planifiées sécurité & maintenance
+  hosts: services
+  roles:
+    - docker_logging
+    - scheduled_tasks

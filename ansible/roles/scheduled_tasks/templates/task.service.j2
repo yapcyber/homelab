@@ -1,0 +1,20 @@
+[Unit]
+Description={{ item.description }}
+OnFailure=notify-fail@%n.service
+{% if item.after is defined %}
+After={{ item.after }}
+Requires={{ item.after }}
+{% endif %}
+
+[Service]
+Type=oneshot
+User={{ item.user | default('root') }}
+ExecStart=/usr/local/sbin/homelab-{{ item.name }}.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# Garde-fous ressources : une tâche de maintenance ne doit jamais
+# mettre à genoux la VM (incident OOM VM media du 2026-07-13).
+MemoryHigh={{ item.memory_high | default('512M') }}
+MemoryMax={{ item.memory_max | default('1G') }}
+TimeoutStartSec={{ item.timeout | default('1h') }}
