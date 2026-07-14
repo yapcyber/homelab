@@ -1,0 +1,14 @@
+# Home Assistant — configuration de base (le reste se gère via l'UI).
+default_config:
+
+# Derrière Traefik (VM infra) : indispensable pour que HA accepte le proxy
+# et voie la vraie IP cliente.
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 10.0.30.10
+
+# Automatisations et scripts gérés depuis l'UI (fichiers créés par HA).
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

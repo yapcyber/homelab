@@ -121,3 +121,8 @@ services/infra/traefik/dynamic/secrets/
 # ntfy : données runtime (cache messages, config locale)
 services/monitoring/ntfy/cache/
 services/monitoring/ntfy/config/
+
+# home assistant : seul configuration.yaml est versionné (config/ contient
+# .storage avec les tokens d auth, la base sqlite, les backups)
+services/cloud/homeassistant/config/*
+!services/cloud/homeassistant/config/configuration.yaml

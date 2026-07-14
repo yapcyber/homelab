@@ -1,0 +1,20 @@
+# =============================================================================
+# services/cloud/homeassistant/docker-compose.yml
+# Home Assistant — domotique et automatisations (geofencing, listes de courses,
+# notifications mobiles via l'app compagnon).
+# Réseau host (recommandé HA : mDNS/découverte) → écoute sur 8123.
+# Accès : https://ha.yapserver.fr (Traefik, internal-only — l'app compagnon
+# passe par le VPN WireGuard).
+# =============================================================================
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.7.2
+    container_name: homeassistant
+    restart: unless-stopped
+    network_mode: host
+    privileged: false
+    environment:
+      - TZ=Europe/Paris
+    volumes:
+      - ./config:/config
+      - /etc/localtime:/etc/localtime:ro
