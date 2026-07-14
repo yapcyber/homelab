@@ -117,3 +117,7 @@ services/monitoring/netbox/env/*.env
 services/monitoring/netbox/docker-compose.override.yml
 services/monitoring/netbox/env/*.env
 services/infra/traefik/dynamic/secrets/
+
+# ntfy : données runtime (cache messages, config locale)
+services/monitoring/ntfy/cache/
+services/monitoring/ntfy/config/
