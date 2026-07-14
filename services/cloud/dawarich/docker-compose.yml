@@ -84,6 +84,12 @@ services:
       RAILS_LOG_TO_STDOUT: "true"
       SELF_HOSTED: "true"
       STORE_GEODATA: "true"
+      # SSO Authentik (OIDC) — valeurs dans .env
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-Authentik}
     logging: &dawarich_logging
       driver: "json-file"
       options:

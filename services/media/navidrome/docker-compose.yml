@@ -17,6 +17,11 @@ services:
       - ND_SESSIONTIMEOUT=24h
       - ND_BASEURL=
       - TZ=Europe/Paris
+      # SSO Authentik : auth par header via forward-auth Traefik (web UI).
+      # Seul Traefik (10.0.30.10) peut poser le header ; en accès direct
+      # (apps Subsonic sur :4533), login/token Navidrome classiques.
+      - ND_REVERSEPROXYWHITELIST=10.0.30.10/32
+      - ND_REVERSEPROXYUSERHEADER=X-Authentik-Username
     volumes:
       - ./data:/data
       - /mnt/jellyfin/music:/music:ro

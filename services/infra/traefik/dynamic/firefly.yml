@@ -5,7 +5,7 @@ http:
       entryPoints: [websecure]
       tls:
         certResolver: cloudflare
-      middlewares: [internal-only@file]
+      middlewares: [internal-only@file, authentik@file]
       service: firefly-svc
   services:
     firefly-svc:
