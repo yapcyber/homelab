@@ -1,0 +1,6 @@
+[Unit]
+Description=Vérification des mises à jour disponibles sur le parc
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/homelab-update-check.sh

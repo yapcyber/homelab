@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Commande à la demande : lance la vérif MAJ du parc dans le créneau nocturne.
+# - Si on est déjà entre 23h et 01h : exécution immédiate.
+# - Sinon : armement d'un timer transient pour le prochain 23:30.
+#   (⚠️ l'Elitebook doit être allumé à ce moment-là.)
+set -u
+H=$((10#$(date +%H)))
+if [ "$H" -ge 23 ] || [ "$H" -lt 1 ]; then
+  echo "Créneau 23h-01h actif → exécution immédiate."
+  systemctl --user start homelab-update-check.service
+else
+  if [ "$H" -lt 23 ]; then TARGET="$(date +%F) 23:30"; else TARGET="$(date -d tomorrow +%F) 23:30"; fi
+  systemctl --user stop homelab-update-check-once.timer 2>/dev/null
+  systemd-run --user --unit=homelab-update-check-once --collect \
+    --on-calendar="$TARGET" --timer-property=Persistent=true \
+    systemctl --user start homelab-update-check.service >/dev/null 2>&1
+  echo "Vérif MAJ armée pour le $TARGET (notification ntfy à la fin)."
+fi
