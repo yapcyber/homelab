@@ -1,0 +1,19 @@
+# =============================================================================
+# services/monitoring/uptime-kuma/docker-compose.yml
+# Uptime Kuma — supervision de disponibilité (sondes HTTP/TCP/ping/DNS/cert)
+# et page de statut. Complète Prometheus (métriques) et les timers docker-health
+# (santé conteneurs) : ici on teste "le service répond-il, de bout en bout ?".
+# Notifications à brancher sur ntfy (support natif) : http://10.0.30.11:8082, topic homelab.
+# Données (base SQLite + config) dans le volume ./data.
+# =============================================================================
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "3001:3001"
+    environment:
+      - TZ=Europe/Paris
