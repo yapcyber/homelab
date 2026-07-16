@@ -17,3 +17,11 @@ services:
     volumes:
       - /mnt/jellyfin/books:/books
       - ./config:/kavita/config
+      # PC gaming (10.0.90.100) — source additionnelle, intermittente (rslave).
+      # Bibliothèque à ajouter dans l'UI Kavita : /mnt/gaming/Kavita
+      - type: bind
+        source: /mnt/gaming
+        target: /mnt/gaming
+        read_only: true
+        bind:
+          propagation: rslave

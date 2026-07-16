@@ -9,9 +9,12 @@ services:
       - ./config:/config
       - ./cache:/cache
       - /mnt/jellyfin:/media:ro
+      # PC gaming (10.0.90.100) — source additionnelle, intermittente.
+      # rslave : le montage CIFS apparaît/disparaît dans le conteneur sans le
+      # recréer. Bibliothèque à ajouter dans l'UI Jellyfin : /mnt/gaming/Jellyfin
       - type: bind
-        source: /mnt/films
-        target: /mnt/films
+        source: /mnt/gaming
+        target: /mnt/gaming
         read_only: true
         bind:
           propagation: rslave

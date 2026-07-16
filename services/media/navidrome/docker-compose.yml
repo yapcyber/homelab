@@ -24,7 +24,20 @@ services:
       - ND_REVERSEPROXYUSERHEADER=X-Authentik-Username
     volumes:
       - ./data:/data
-      - /mnt/jellyfin/music:/music:ro
+      # Navidrome ne scanne qu'UNE racine (/music) : on met les deux sources en
+      # sous-dossiers. ⚠️ Le chemin NAS passe de /music à /music/nas → re-scan
+      # complet au prochain démarrage (les compteurs d'écoute / favoris liés au
+      # chemin sont réinitialisés ; bibliothèque récente donc impact faible).
+      - /mnt/jellyfin/music:/music/nas:ro
+      # PC gaming (10.0.90.100) — musique, intermittente. Placeholder local
+      # /mnt/gaming/Navidrome garantit le démarrage même PC éteint ; un restart
+      # de Navidrome est nécessaire quand le PC revient (bind d'un sous-dossier).
+      - type: bind
+        source: /mnt/gaming/Navidrome
+        target: /music/gaming
+        read_only: true
+        bind:
+          propagation: rslave
     ports:
       - "4533:4533"
     networks:
