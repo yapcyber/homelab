@@ -20,8 +20,8 @@
 # Scénarios actifs : crowdsecurity/http-bad-user-agent, crowdsecurity/http-crawl-non_statics
 #                    crowdsecurity/http-path-traversal-probing, crowdsecurity/http-sqli-probing
 source: file
-  filenames:
-    - /var/log/traefik/access.log
-    - /var/log/traefik/traefik.log
-  labels:
-    type: traefik
+filenames:
+  - /var/log/traefik/access.log
+  - /var/log/traefik/traefik.log
+labels:
+  type: traefik
