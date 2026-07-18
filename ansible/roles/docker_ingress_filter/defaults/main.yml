@@ -1,0 +1,6 @@
+---
+# Ports Docker publiés qui ne doivent pas être joints directement par les VLANs.
+docker_restricted_ports: []
+docker_ingress_allowed_sources:
+  - 10.0.30.10/32   # Traefik inter-VM
+  - 10.0.100.0/24   # VLAN Admin / break-glass

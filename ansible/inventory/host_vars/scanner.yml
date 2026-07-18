@@ -7,3 +7,4 @@ scheduled_tasks:
 backup_jobs:
   10-gvmd-db: |
     docker exec greenbone-community-edition-pg-gvm-1 sh -c 'pg_dumpall -U "${POSTGRES_USER:-postgres}"' | gzip > "$DAILY/gvmd-db.sql.gz"
+docker_restricted_ports: [443, 9392]

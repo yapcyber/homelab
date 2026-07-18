@@ -121,6 +121,7 @@ providers:
   # automatiquement la route correspondante. Quand le container s'arrête,
   # la route disparaît. Zéro rechargement manuel.
   docker:
+    endpoint: "tcp://docker-socket-proxy:2375"
     exposedByDefault: false  # ← SÉCURITÉ FONDAMENTALE
                               # Sans ce paramètre, TOUS les containers seraient
                               # exposés automatiquement sur internet.

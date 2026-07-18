@@ -1,0 +1,25 @@
+---
+- name: Déployer le filtre des ports Docker publiés
+  ansible.builtin.template:
+    src: homelab-docker-ingress.sh.j2
+    dest: /usr/local/sbin/homelab-docker-ingress
+    owner: root
+    group: root
+    mode: "0750"
+  notify: Recharger systemd et appliquer le filtre Docker
+
+- name: Déployer l'unité du filtre Docker
+  ansible.builtin.template:
+    src: homelab-docker-ingress.service.j2
+    dest: /etc/systemd/system/homelab-docker-ingress.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger systemd et appliquer le filtre Docker
+
+- name: Activer le filtre Docker
+  ansible.builtin.systemd:
+    name: homelab-docker-ingress.service
+    enabled: true
+    state: started
+    daemon_reload: true

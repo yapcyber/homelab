@@ -5,4 +5,5 @@
   hosts: services
   roles:
     - docker_logging
+    - docker_ingress_filter
     - scheduled_tasks

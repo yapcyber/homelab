@@ -96,7 +96,6 @@ http:
     # =========================================================================
     security-headers:
       headers:
-        sslRedirect: true
         forceSTSHeader: true
         stsSeconds: 31536000           # HSTS : 1 an (365 jours)
         stsIncludeSubdomains: true     # HSTS s'applique aussi aux sous-domaines
@@ -168,8 +167,8 @@ http:
     # =========================================================================
     traefik-auth:
       basicAuth:
-        users:
-          - "${TRAEFIK_DASHBOARD_USER}:${TRAEFIK_DASHBOARD_HASH}"
+        # Le file provider n'interpole pas les variables ${...}.
+        usersFile: "/etc/traefik/dynamic/secrets/traefik_users"
         removeHeader: true   # Ne pas transmettre l'en-tête Authorization au service
 
     # =========================================================================
@@ -186,7 +185,8 @@ http:
     internal-only:
       ipAllowList:
         sourceRange:
-          - "10.0.0.0/8"       # Tous les VLANs internes
+          - "10.0.10.0/24"     # Management
+          - "10.0.100.0/24"    # Admin
           - "10.0.200.0/24"    # Clients WireGuard VPN
           - "127.0.0.1/32"     # Loopback
 

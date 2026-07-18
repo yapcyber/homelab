@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CHAIN=HOMELAB-INGRESS
+
+# Docker crée DOCKER-USER au démarrage. Ne jamais modifier ses chaînes internes.
+iptables -nL DOCKER-USER >/dev/null 2>&1 || exit 0
+iptables -N "$CHAIN" 2>/dev/null || true
+iptables -F "$CHAIN"
+
+iptables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+{% for source in docker_ingress_allowed_sources %}
+iptables -A "$CHAIN" -s {{ source }} -j RETURN
+{% endfor %}
+{% for port in docker_restricted_ports %}
+# --ctorigdstport cible le port publié avant la DNAT Docker.
+iptables -A "$CHAIN" -p tcp -m conntrack --ctorigdstport {{ port }} -j REJECT --reject-with tcp-reset
+{% endfor %}
+iptables -A "$CHAIN" -j RETURN
+
+iptables -C DOCKER-USER -j "$CHAIN" 2>/dev/null || iptables -I DOCKER-USER 1 -j "$CHAIN"

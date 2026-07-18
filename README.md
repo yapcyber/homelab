@@ -16,7 +16,8 @@ Un homelab à trois usages :
 - **Sécurité / portfolio** — un véritable SOC maison (détection réseau + hôte, scan de vulnérabilités, detection-as-code) servant de démonstration de compétences en infrastructure, réseau, sécurité et DevOps.
 - **Accès distant** — partout via WireGuard, exposition publique « par exception » via Cloudflare Tunnel.
 
-Tout est versionné dans ce dépôt et documenté sur le portfolio Docusaurus.
+La couche services et le socle IaC sont versionnés dans ce dépôt. Les exports
+OPNsense/Cisco et une partie du périmètre Cloudflare restent à intégrer.
 
 ---
 
@@ -67,7 +68,9 @@ Reverse proxy unique : **Traefik**. Tous les services internes sont accessibles 
 | 100 | Admin | 10.0.100.0/24 |
 | 200 | WireGuard | 10.0.200.0/24 |
 
-Segmentation appliquée au pare-feu (OPNsense) : Production/Storage resserrés (DNS/NTP/NFS + sortie Internet seulement, latéral RFC1918 **bloqué + loggé**).
+Segmentation inter-VLAN appliquée au pare-feu OPNsense. Le trafic est-ouest au
+sein du VLAN Production ne traverse pas OPNsense ; les interfaces Docker
+publiées sont donc filtrées sur chaque VM via la chaîne `DOCKER-USER`.
 
 ---
 
@@ -149,7 +152,7 @@ homelab/
 
 ## 🔐 Modèle d'accès & posture de sécurité
 
-- **Public par exception** (Cloudflare Tunnel) : seuls Jellyfin, Nextcloud, Immich sont exposés, avec leur auth native (mots de passe forts + 2FA). Tout le reste est **VPN-only** (`internal-only` côté Traefik).
+- **Public par exception** : Cloudflare Tunnel est prévu pour Jellyfin, Nextcloud et Immich, mais n'est pas encore activé. L'accès actuel reste **VPN-only** (`internal-only` côté Traefik).
 - **WireGuard** pour l'accès distant ; **CrowdSec** en bouncer côté edge ; **Authentik** pour le SSO.
 - **SSH par clé uniquement** (aucun mot de passe).
 - **Aucun secret versionné** : `.env`, clés, PEM et certificats sont exclus par `.gitignore` ; les configurations publiées utilisent des placeholders (ex. `${CROWDSEC_BOUNCER_API_KEY}`).

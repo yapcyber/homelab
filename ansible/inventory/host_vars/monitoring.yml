@@ -8,3 +8,4 @@ scheduled_tasks:
 backup_jobs:
   10-grafana: |
     docker cp -q grafana:/var/lib/grafana - | gzip > "$DAILY/grafana-data.tar.gz"
+docker_restricted_ports: [3000, 3001, 3100, 8082, 9090]

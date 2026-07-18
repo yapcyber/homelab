@@ -1,6 +1,23 @@
 name: monitoring
 
 services:
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:v0.4.2
+    container_name: monitoring-docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      INFO: 1
+      NETWORKS: 1
+      POST: 0
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker-api]
+    read_only: true
+    tmpfs: [/run, /tmp]
+    security_opt: [no-new-privileges:true]
+
   prometheus:
     image: prom/prometheus@sha256:3c42b892cf723fa54d2f262c37a0e1f80aa8c8ddb1da7b9b0df9455a35a7f893
     container_name: prometheus
@@ -37,9 +54,10 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor@sha256:3de2bd5203120b866d74a9b283b2ffb8ec382fbf9dc321814700c6ea6f44ec57
     container_name: cadvisor
-    privileged: true
+    privileged: false
     command:
       - --docker_only=true
+      - --docker=tcp://docker-socket-proxy:2375
       - --housekeeping_interval=30s
     devices:
       - /dev/kmsg:/dev/kmsg
@@ -48,11 +66,18 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
-      - /var/run:/var/run:ro
-    expose: ["8080"]
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     security_opt:
+      - no-new-privileges:true
       - label=disable
-    networks: [monitoring]
+    expose: ["8080"]
+    depends_on: [docker-socket-proxy]
+    networks: [monitoring, docker-api]
     restart: unless-stopped
 
   loki:
@@ -108,6 +133,9 @@ services:
     restart: unless-stopped
 
 networks:
+  docker-api:
+    name: monitoring-docker-api
+    internal: true
   monitoring:
     name: monitoring
 

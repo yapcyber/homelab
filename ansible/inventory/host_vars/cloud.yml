@@ -21,3 +21,4 @@ backup_jobs:
     tar czf "$DAILY/wanderer-data.tar.gz" -C /home/debian/homelab/services/cloud/wanderer/data pb_data uploads
   90-envs: |
     find /home/debian/homelab/services/cloud -maxdepth 2 -name ".env" | tar czf - -T - 2>/dev/null | enc > "$DAILY/envs.tar.gz.enc"
+docker_restricted_ports: [80, 2283, 3000, 3001, 3002, 8080, 8123]

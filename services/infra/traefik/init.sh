@@ -37,7 +37,15 @@ info "Création des dossiers de données..."
 mkdir -p data/logs
 mkdir -p data/crowdsec/db
 mkdir -p data/crowdsec/config
+mkdir -p dynamic/secrets
 ok "Dossiers data/ créés"
+
+# Le file provider Traefik n'interpole pas les variables d'environnement.
+if [[ ! -s "dynamic/secrets/traefik_users" ]]; then
+  warn "dynamic/secrets/traefik_users absent"
+  echo "  Générer avant le déploiement :"
+  echo "  htpasswd -nbB admin 'MOT_DE_PASSE' > dynamic/secrets/traefik_users"
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Fichier acme.json — Stockage des certificats Let's Encrypt

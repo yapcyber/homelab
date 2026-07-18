@@ -6,12 +6,16 @@ services:
     environment:
       - DOMAIN=https://vault.yapserver.fr
       - ADMIN_TOKEN=${ADMIN_TOKEN}
-      - SIGNUPS_ALLOWED=true
+      # Comptes existants inchangés ; nouveaux comptes uniquement sur invitation admin.
+      - SIGNUPS_ALLOWED=false
+      - INVITATIONS_ALLOWED=true
       - WEBSOCKET_ENABLED=true
       - LOG_LEVEL=warn
     volumes:
       - ./data:/data
     ports:
+      # Traefik inter-VM doit joindre ce port. Le filtrage DOCKER-USER limite
+      # l'accès à Traefik et au VLAN Admin (rôle docker_ingress_filter).
       - "80:80"
     networks:
       - traefik-proxy

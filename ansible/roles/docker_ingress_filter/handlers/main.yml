@@ -1,0 +1,6 @@
+---
+- name: Recharger systemd et appliquer le filtre Docker
+  ansible.builtin.systemd:
+    name: homelab-docker-ingress.service
+    daemon_reload: true
+    state: restarted
