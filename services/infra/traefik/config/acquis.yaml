@@ -19,17 +19,9 @@
 # Parsers actifs : crowdsecurity/traefik-logs
 # Scénarios actifs : crowdsecurity/http-bad-user-agent, crowdsecurity/http-crawl-non_statics
 #                    crowdsecurity/http-path-traversal-probing, crowdsecurity/http-sqli-probing
-- source: file
+source: file
   filenames:
     - /var/log/traefik/access.log
-  labels:
-    type: traefik
-
-# ---------------------------------------------------------------------------
-# Logs généraux Traefik — Erreurs d'infrastructure
-# ---------------------------------------------------------------------------
-- source: file
-  filenames:
     - /var/log/traefik/traefik.log
   labels:
     type: traefik

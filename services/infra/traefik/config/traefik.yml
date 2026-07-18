@@ -22,6 +22,9 @@ api:
   debug: false
   insecure: false   # CRITIQUE : false = le dashboard n'est PAS accessible sur :8080 en clair
 
+# Endpoint interne utilisé par `traefik healthcheck --ping`.
+ping: {}
+
 # =============================================================================
 # LOGGING
 # =============================================================================
