@@ -1,170 +1,229 @@
-<div align="center">
+# YapServer Homelab
 
-# 🏠 YapServer Homelab
+Infrastructure auto-hébergée personnelle et familiale, également utilisée comme
+laboratoire cybersécurité et portfolio orienté **SOC**, **Detection Engineering**,
+réponse à incident et infrastructure-as-code.
 
-> Infrastructure homelab auto-hébergée : cloud personnel, médias, et un **Security Operations Center** complet — conçue, durcie et documentée comme environnement d'apprentissage et portfolio orienté **SOC / Detection Engineering**.
+- Auteur : [yapcyber](https://github.com/yapcyber)
+- Portfolio : [yapserver.fr](https://yapserver.fr)
+- Accès distant : WireGuard
+- Exposition Internet : aucune publication directe ; Cloudflare Tunnel reste prévu par exception
 
-**Auteur :** [yapcyber](https://github.com/yapcyber) · **Portfolio :** [yapserver.fr](https://yapserver.fr)
+## Objectifs
 
----
+Le projet remplit trois fonctions complémentaires :
 
-## 🎯 Objectif
+1. héberger des services personnels et familiaux durables ;
+2. construire un environnement défensif réaliste, du réseau à la réponse à incident ;
+3. rendre l'infrastructure reproductible, observable et documentée.
 
-Un homelab à trois usages :
+Le principe directeur est **fail-closed** : une autorisation doit être explicite,
+les secrets ne sont jamais stockés en clair dans Git, et une configuration non
+validée ne doit pas être déployée.
 
-- **Personnel / familial** — gestionnaire de mots de passe, cloud, photos, médias pour les proches.
-- **Sécurité / portfolio** — un véritable SOC maison (détection réseau + hôte, scan de vulnérabilités, detection-as-code) servant de démonstration de compétences en infrastructure, réseau, sécurité et DevOps.
-- **Accès distant** — partout via WireGuard, exposition publique « par exception » via Cloudflare Tunnel.
+## Architecture
 
-La couche services et le socle IaC sont versionnés dans ce dépôt. Les exports
-OPNsense/Cisco et une partie du périmètre Cloudflare restent à intégrer.
-
----
-
-## 🗺️ Architecture
-
-```
+```text
 Internet
-  │  (double-NAT temporaire → WireGuard / Cloudflare Tunnel)
-OPNsense (bare metal)  — pare-feu, VLANs, DHCP/DNS, WireGuard, DDNS
-  │
-Cisco 3560X  — switching L2/L3, SPAN → Security Onion
-  │
-┌───────────────────────────────────────────────┐
-│ Cluster Proxmox « yapserver » (3 nœuds, HA)     │
-│  pve1 / pve2 / pve3                             │
-│                                                 │
-│  VM 200  TrueNAS SCALE  (stockage ZFS, NFS)     │
-│  VM 101  infra          (Traefik, Authentik…)   │
-│  VM 102  monitoring     (Prometheus, Grafana…)  │
-│  VM 103  cloud          (Nextcloud, Immich…)    │
-│  VM 104  media          (Jellyfin, *arr…)       │
-│  VM 105  security       (Wazuh — SIEM/HIDS)     │
-│  VM 106  scanner        (OpenVAS / Greenbone)   │
-│  VM 107  firefly        (Firefly III)           │
-│  VM 108  osint          (SpiderFoot)            │
-└───────────────────────────────────────────────┘
-  │
-Security Onion (bare metal)  — NIDS/NSM (Suricata + Zeek + Elastic) via SPAN
+  |
+Box opérateur (double NAT temporaire)
+  |
+OPNsense bare metal
+  |-- VLAN Management / Corosync / Production / DMZ / SOC
+  |-- VLAN Storage / IoT / Guest / Gaming / Admin / WireGuard
+  |
+Cisco 3560X -- SPAN --> Security Onion (Suricata + Zeek)
+  |
+Cluster Proxmox VE : pve1 / pve2 / pve3
+  |-- VMs Docker de services
+  |-- TrueNAS SCALE (stockage NFS/ZFS provisoire)
+  `-- workloads sécurité, monitoring et réponse à incident
+
+Control node : EliteBook -- Packer / OpenTofu / Ansible / Git
 ```
 
-Reverse proxy unique : **Traefik**. Tous les services internes sont accessibles en `*.yapserver.fr` (DNS interne Unbound en split-DNS) derrière des certificats Let's Encrypt wildcard (DNS-challenge Cloudflare).
+Le trafic inter-VLAN est filtré par OPNsense. Le trafic est-ouest du VLAN
+Production ne traverse pas le pare-feu ; les ports Docker publiés nécessaires au
+proxy inter-VM sont donc protégés localement dans `DOCKER-USER`. Leur accès direct
+est réservé à Traefik et au VLAN Admin.
 
----
+## Services
 
-## 🔌 Réseau (VLANs)
+### Identité, accès et infrastructure
 
-| VLAN | Rôle | Subnet |
-|---|---|---|
-| 10 | Management | 10.0.10.0/24 |
-| 20 | Corosync | 10.0.20.0/24 |
-| 30 | Production | 10.0.30.0/24 |
-| 40 | DMZ | 10.0.40.0/24 |
-| 50 | SOC | 10.0.50.0/24 |
-| 60 | Storage | 10.0.60.0/24 |
-| 70 | IoT | 10.0.70.0/24 |
-| 80 | Guest | 10.0.80.0/24 |
-| 90 | Gaming | 10.0.90.0/24 |
-| 100 | Admin | 10.0.100.0/24 |
-| 200 | WireGuard | 10.0.200.0/24 |
+- Traefik 3.7, certificats Let's Encrypt par DNS challenge et CrowdSec ;
+- Authentik : MFA TOTP, enrôlement sur invitation, OIDC et forward-auth ;
+- Homarr et NetBox ;
+- WireGuard, Unbound split-DNS et Cloudflare DNS ;
+- ntfy pour les alertes opérationnelles.
 
-Segmentation inter-VLAN appliquée au pare-feu OPNsense. Le trafic est-ouest au
-sein du VLAN Production ne traverse pas OPNsense ; les interfaces Docker
-publiées sont donc filtrées sur chaque VM via la chaîne `DOCKER-USER`.
+### Cloud personnel et usages familiaux
 
----
+- Vaultwarden, en inscription fermée et création sur invitation ;
+- Nextcloud et Nextcloud Talk HPB ;
+- Immich ;
+- Home Assistant ;
+- Dawarich, Wanderer et SplitPro.
 
-## 🧰 Stack technique
+### Médias et lecture
 
-**Infrastructure** — Proxmox VE (cluster 3 nœuds, HA), TrueNAS SCALE (ZFS, NFS), Debian 12 (VMs cloud-init), Docker + Docker Compose.
+- Jellyfin, Jellystat et Seerr ;
+- Prowlarr, Radarr, Sonarr, Lidarr, qBittorrent derrière Gluetun ;
+- Navidrome et Beets ;
+- AudioBookShelf, Kavita et Readeck ;
+- stockage média TrueNAS complété par une source SMB sur le PC Gaming.
 
-**Réseau & accès** — OPNsense (VLANs, Kea DHCP, Unbound split-DNS, WireGuard, DDNS Cloudflare), Cisco 3560X (SPAN), Traefik (reverse proxy unique) + CrowdSec, Authentik (SSO), Let's Encrypt wildcard.
+### Finances
 
-**Services** — Nextcloud, Immich, Vaultwarden, Jellyfin + stack *arr, Firefly III, Homarr, NetBox.
+- Firefly III et Data Importer ;
+- Ghostfolio.
 
-**Observabilité** — Prometheus, Grafana, Loki/Promtail, cAdvisor, Node Exporter, Jellystat.
+### Observabilité
 
-**Sécurité** — Security Onion (NIDS/NSM), Wazuh (SIEM/HIDS), OpenVAS/Greenbone (scan de vulnérabilités), SpiderFoot (OSINT), règles **Sigma** (detection-as-code).
+- Prometheus, Grafana, Loki et Promtail ;
+- Node Exporter et cAdvisor durci ;
+- Uptime Kuma ;
+- annotations de maintenance et tableau de conformité Wazuh.
 
----
+### Sécurité et réponse à incident
 
-## 📦 Services par VM (VLAN 30)
+- Security Onion : Suricata, Zeek et visibilité réseau via SPAN ;
+- Wazuh : SIEM/HIDS, FIM, SCA, vulnérabilités et règles locales ;
+- Greenbone/OpenVAS ;
+- TheHive 5 et Cortex 4 avec analyzer Maigret ;
+- SpiderFoot et Maigret pour l'OSINT ;
+- règles Sigma versionnées dans `detections/`.
 
-| VM | IP | Services |
-|---|---|---|
-| infra | 10.0.30.10 | Traefik + CrowdSec, Authentik, Homarr, cloudflared |
-| monitoring | 10.0.30.11 | Prometheus, Grafana, Loki, cAdvisor, **NetBox** |
-| cloud | 10.0.30.12 | Vaultwarden, Nextcloud, Immich |
-| media | 10.0.30.13 | Jellyfin, Radarr/Sonarr/Prowlarr, qBittorrent, **Jellystat** |
-| security | 10.0.30.14 | **Wazuh** (manager + indexer + dashboard) |
-| scanner | 10.0.30.15 | **OpenVAS / Greenbone Community** |
-| firefly | 10.0.30.16 | **Firefly III** + Data Importer |
-| osint | 10.0.30.17 | **SpiderFoot** |
-| TrueNAS | 10.0.60.10 | NAS (pools `tank` + `media`) |
+### Projets complémentaires
 
----
+- Kyber sur le PC Gaming pour le cloud gaming en accès VPN-only ;
+- backend LLM local Tarasque/Ollama, hors de ce dépôt ;
+- pipeline CV-as-Code en cours de développement ;
+- serveur mail receive-only prévu, non déployé.
 
-## 🛡️ Sécurité & Detection Engineering
+## Automatisation et GitOps
 
-Le cœur « portfolio » du projet : un cycle de détection complet, couvrant le **réseau** et l'**hôte**, mappé sur **MITRE ATT&CK**, et géré en **detection-as-code**.
+La chaîne cible est :
 
-### Détection réseau — Security Onion (NSM)
-- **Suricata** (NIDS) + **Zeek** (métadonnées) alimentés par le **SPAN** du Cisco 3560X.
-- Règles NIDS personnalisées (déclenchement/validation : marqueur ICMP custom, scan `nmap` → **T1046**).
-- **Règles Sigma** déployées via **ElastAlert 2** (signature vs comportement), versionnées dans [`detections/sigma/`](detections/sigma/).
-
-### Détection hôte — Wazuh (SIEM / HIDS)
-- Agents sur l'ensemble des VMs et des nœuds Proxmox.
-- **FIM** (whodata sur `/etc`, `.ssh`), **SCA** (durcissement CIS), **rootcheck**, intégration **VirusTotal**.
-- **Règles de corrélation personnalisées** (escalade contextuelle d'un brute-force SSH selon le VLAN source — **T1110**) — voir [`services/security/wazuh/local_rules.xml`](services/security/wazuh/local_rules.xml).
-- **Tuning du bruit** documenté : downgrade ciblé des faux positifs (promiscuous mode Docker, VirusTotal « no records », sessions PAM, rootcheck génériques) — ~68 % d'alertes en moins, sans perte de signal.
-
-### Defense in depth — l'angle mort est-ouest
-Démonstration A/B clé : le trafic **intra-nœud** (VMs co-localisées sur le même hyperviseur) ne traverse jamais le switch physique → **invisible au SPAN**. La couche **agent (Wazuh)** couvre cet angle mort → illustration concrète de la défense en profondeur.
-
-### Scan de vulnérabilités
-- **OpenVAS / Greenbone Community** (VM dédiée) — scans planifiés, triage basé sur le risque réel (≠ CVSS brut).
-
----
-
-## 🗂️ Structure du dépôt
-
+```text
+Packer -> template Debian doré -> OpenTofu -> VM -> Ansible -> services Docker
+                                                |
+Git / Renovate -> validation -> pull VM -> déploiement contrôlé
 ```
+
+État actuel :
+
+- Packer construit le template Debian 13 ;
+- OpenTofu sait provisionner une VM de validation, avec state chiffré ;
+- Ansible gère le patching, les snapshots pré-maintenance, la journalisation
+  Docker, les sauvegardes et les timers de sécurité ;
+- Renovate ouvre les mises à jour, avec validation manuelle des majeures ;
+- les VMs applicatives font uniquement des pulls en lecture ;
+- la généralisation d'OpenTofu aux VMs de production et la CI de validation
+  restent à réaliser.
+
+## Tâches planifiées
+
+Des timers systemd versionnés assurent notamment :
+
+- sauvegardes chiffrées et rotation ;
+- contrôle de santé des conteneurs ;
+- détection de dérive Git ;
+- contrôle des certificats et agents Wazuh ;
+- mise à jour des feeds Greenbone ;
+- rappel de test de restauration ;
+- fenêtre hebdomadaire snapshot puis patch Ansible.
+
+Les alertes convergent vers ntfy. Une sauvegarde n'est considérée fiable qu'après
+un test de restauration ; cette validation reste un chantier prioritaire.
+
+## Gestion des secrets
+
+- les `.env`, clés, certificats et données runtime sont ignorés par Git ;
+- Ansible Vault chiffre actuellement les secrets utilisés par l'inventaire ;
+- SOPS + Age est configuré dans `.sops.yaml`, mais aucun secret SOPS n'est encore
+  versionné : il s'agit pour l'instant d'un socle préparatoire ;
+- `prompting/` est volontairement exclu du dépôt public, car il contient la
+  cartographie détaillée, l'état de travail et des informations personnelles.
+
+La clé privée Age et les clés de sauvegarde doivent être conservées hors du dépôt
+et sauvegardées dans un emplacement indépendant.
+
+## Structure du dépôt
+
+```text
 homelab/
-├── README.md
-├── .gitignore                 # secrets/volumes jamais versionnés
-├── infrastructure/            # docs & procédures (TrueNAS↔Proxmox, …)
-├── services/
-│   ├── infra/                 # traefik (+ dynamic/), authentik, homarr, cloudflared
-│   ├── monitoring/            # prometheus, grafana, loki, … + netbox/
-│   ├── cloud/                 # vaultwarden, nextcloud, immich
-│   ├── media/                 # jellyfin, *arr, qbittorrent + jellystat/
-│   ├── security/wazuh/        # local_rules.xml + agent.conf (travail de détection)
-│   ├── scanner/openvas/       # greenbone community containers
-│   ├── firefly/               # firefly III + data-importer
-│   └── osint/                 # spiderfoot
-├── detections/
-│   └── sigma/                 # règles Sigma (detection-as-code)
-└── portfolio/                 # site Docusaurus (yapserver.fr)
+|-- ansible/
+|   |-- control-node/       # scripts et timers de l'EliteBook
+|   |-- inventory/          # inventaires statique/dynamique et host_vars
+|   |-- playbooks/          # baseline, patch, snapshots, tâches planifiées
+|   `-- roles/              # maintenance, alerting et filtrage Docker
+|-- detections/
+|   `-- sigma/              # detection-as-code
+|-- docs/                   # architecture, documentation et runbooks
+|-- iac/
+|   |-- opentofu/           # provisioning Proxmox
+|   `-- packer/             # templates Debian
+|-- infrastructure/         # procédures NAS/réseau/Proxmox
+|-- portfolio/              # site Docusaurus bilingue
+|-- scripts/                # outils d'exploitation ponctuels
+|-- services/
+|   |-- cloud/              # Nextcloud, Immich, Vaultwarden, HA, etc.
+|   |-- firefly/            # Firefly III et Ghostfolio
+|   |-- infra/              # Traefik, Authentik, Homarr, NetBox, Talk HPB
+|   |-- media/              # Jellyfin, arr, musique et lecture
+|   |-- monitoring/         # Prometheus, Grafana, Loki, ntfy, Uptime Kuma
+|   |-- osint/              # SpiderFoot et Maigret
+|   |-- scanner/            # Greenbone/OpenVAS
+|   `-- security/           # Wazuh
+|-- renovate.json
+`-- README.md
 ```
 
+`prompting/`, les données persistantes et certains composants déployés hors Git
+ne figurent volontairement pas dans cette vue publique.
+
+## État et limites connues
+
+### Opérationnel
+
+- cluster Proxmox trois nœuds et segmentation VLAN ;
+- services personnels/familiaux derrière Traefik ;
+- SSO Authentik sur les applications compatibles ;
+- monitoring, alerting et tâches de maintenance ;
+- Wazuh, Security Onion, Greenbone, TheHive/Cortex et OSINT ;
+- chaîne Packer/OpenTofu/Ansible fonctionnelle sur son périmètre actuel.
+
+### Priorités
+
+1. sortir les disques système des VMs du NFS TrueNAS sur pont USB ;
+2. tester régulièrement les restaurations et externaliser les clés de sauvegarde ;
+3. ajouter une CI de validation des Compose, playbooks, IaC et règles Sigma ;
+4. généraliser OpenTofu aux VMs de production ;
+5. microsegmenter davantage le VLAN Production ;
+6. terminer le forwarding Wazuh vers TheHive ;
+7. déployer Cloudflare Tunnel uniquement après validation de la posture edge ;
+8. finaliser le portfolio et le pipeline CV-as-Code.
+
+### Limites assumées
+
+- stockage TrueNAS provisoire, sans redondance matérielle suffisante ;
+- switch limité à 1 Gbit/s tant que le module 10G n'est pas installé ;
+- OPNsense, Cisco, Security Onion et une partie de Cloudflare ne sont pas encore
+  entièrement reproductibles depuis ce dépôt ;
+- les configurations publiques évitent les secrets, mais exposent nécessairement
+  une partie de la conception technique du portfolio.
+
+## Documentation
+
+- [Documentation homelab](docs/homelab.md)
+- [Runbook VM gelée par dépendance NFS](docs/runbooks/vm-gelee-nfs-nas.md)
+- [Runbook diagnostic SSH](docs/runbooks/ban-ssh-depuis-control-node.md)
+- [Autoriser le control node sur Security Onion](docs/runbooks/security-onion-ssh-control-node.md)
+- [Procédure TrueNAS / Proxmox](infrastructure/nas/truenas-proxmox/TRUENAS-PROXMOX.md)
+
 ---
 
-## 🔐 Modèle d'accès & posture de sécurité
-
-- **Public par exception** : Cloudflare Tunnel est prévu pour Jellyfin, Nextcloud et Immich, mais n'est pas encore activé. L'accès actuel reste **VPN-only** (`internal-only` côté Traefik).
-- **WireGuard** pour l'accès distant ; **CrowdSec** en bouncer côté edge ; **Authentik** pour le SSO.
-- **SSH par clé uniquement** (aucun mot de passe).
-- **Aucun secret versionné** : `.env`, clés, PEM et certificats sont exclus par `.gitignore` ; les configurations publiées utilisent des placeholders (ex. `${CROWDSEC_BOUNCER_API_KEY}`).
-
----
-
-## 🚦 État
-
-✅ Cluster Proxmox + HA · Réseau segmenté · TrueNAS/NFS · Reverse proxy + SSO · Cloud/médias · Monitoring · **SOC (Security Onion + Wazuh + agents)** · **Scan de vulnérabilités** · **Detection-as-code (Sigma)** · OSINT · Finances perso.
-
-🔜 Cloudflare Tunnel · IA locale (Ollama) · pipeline CV · MISP / TheHive / Velociraptor · mail interne (post-migration FAI).
-
----
-
-*Homelab personnel — documenté à des fins d'apprentissage et de portfolio. Les adresses internes (RFC1918) ne sont pas routables depuis Internet.*
+Homelab personnel documenté à des fins d'apprentissage et de portfolio. Les
+adresses privées éventuellement présentes dans l'historique ne sont pas
+routables depuis Internet, mais ne doivent pas être considérées comme un secret.

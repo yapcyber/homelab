@@ -126,3 +126,6 @@ services/monitoring/ntfy/config/
 # .storage avec les tokens d auth, la base sqlite, les backups)
 services/cloud/homeassistant/config/*
 !services/cloud/homeassistant/config/configuration.yaml
+
+# Contexte de travail privé : cartographie complète, état et données personnelles.
+/prompting/
