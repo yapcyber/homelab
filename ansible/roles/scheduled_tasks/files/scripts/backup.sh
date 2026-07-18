@@ -6,6 +6,8 @@
 # Les jobs sensibles chiffrent avec `enc` (clé /etc/homelab-backup.key,
 # à sauvegarder dans Vaultwarden : sans elle, pas de restauration).
 set -u
+exec 9>/run/lock/homelab-backup.lock
+flock -n 9 || { echo "une sauvegarde est déjà en cours" >&2; exit 1; }
 BASE=/var/backups/homelab
 DAILY="$BASE/daily/$(date +%F)"
 KEYFILE=/etc/homelab-backup.key

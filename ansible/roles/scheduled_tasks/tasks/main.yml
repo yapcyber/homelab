@@ -42,6 +42,20 @@
   loop_control:
     label: "{{ item.key }}"
 
+- name: Vérification quotidienne des sauvegardes
+  ansible.builtin.set_fact:
+    scheduled_tasks: "{{ scheduled_tasks + [backup_verify_task] }}"
+  vars:
+    backup_verify_task:
+      name: backup-verify
+      description: "Vérification d'intégrité de la dernière sauvegarde"
+      calendar: "06:30"
+      random_delay: 30m
+      script: backup-verify.sh
+  when:
+    - backup_jobs | length > 0
+    - scheduled_tasks | selectattr('name', 'equalto', 'backup-verify') | list | length == 0
+
 # Tâches planifiées : script + service + timer
 - name: Scripts des tâches
   ansible.builtin.copy:

@@ -77,6 +77,10 @@ terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/terraform.tfvars
 terraform/*.auto.tfvars
+iac/opentofu/.terraform/
+iac/opentofu/*.tfstate
+iac/opentofu/*.tfstate.*
+iac/opentofu/*.tfvars
 
 # -----------------------------------------------------------------------------
 # PACKER

@@ -1,0 +1,47 @@
+name: Validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  portfolio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portfolio/package-lock.json
+      - run: npm ci
+        working-directory: portfolio
+      - run: npm run typecheck
+        working-directory: portfolio
+      - run: npm run build
+        working-directory: portfolio
+
+  static-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Shell syntax
+        run: |
+          find ansible/control-node ansible/roles/scheduled_tasks/files/scripts scripts \
+            -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+      - name: Compose syntax
+        run: |
+          while IFS= read -r file; do
+            docker compose -f "$file" config --no-interpolate --quiet
+          done < <(find services -type f \( -name 'docker-compose.yml' -o -name 'compose.yaml' \) \
+            ! -path '*/monitoring/netbox/*' | sort)
+      - name: Prevent private prompting context
+        run: test -z "$(git ls-files prompting)"

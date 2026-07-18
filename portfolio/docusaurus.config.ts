@@ -87,8 +87,6 @@ const config: Config = {
         // Publié sur LinkedIn avec lien vers l'article complet
         blog: {
           showReadingTime: true,
-          readingTime: ({content, frontMatter, defaultReadingTime}) =>
-            defaultReadingTime({content, options: {wordsPerMinute: 250}}),
           // Flux RSS/Atom pour les abonnés
           feedOptions: {
             type: ['rss', 'atom'],
@@ -103,7 +101,6 @@ const config: Config = {
           blogSidebarCount: 'ALL',
           postsPerPage: 10,
           onInlineAuthors: 'ignore',
-  	  onUnknownTags: 'ignore',
         },
 
         theme: {
@@ -171,7 +168,7 @@ const config: Config = {
       logo: {
         alt: 'YapServer Homelab',
         src: 'img/logo.svg',
-        srcDark: 'img/logo-dark.svg',
+        srcDark: 'img/logo.svg',
       },
       items: [
         // Documentation technique
@@ -216,21 +213,10 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Architecture',
+          title: 'Homelab',
           items: [
-            {label: 'Network Plan', to: '/docs/architecture/network'},
-            {label: 'VLAN Design', to: '/docs/architecture/vlans'},
-            {label: 'Hardware', to: '/docs/architecture/hardware'},
-            {label: 'Security Stack', to: '/docs/architecture/security'},
-          ],
-        },
-        {
-          title: 'Phases',
-          items: [
-            {label: 'Phase 0 — Planning', to: '/docs/phases/phase-0'},
-            {label: 'Phase 1 — Software Prep', to: '/docs/phases/phase-1'},
-            {label: 'Phase 2 — Network & OPNsense', to: '/docs/phases/phase-2'},
-            {label: 'Phase 3 — Proxmox Cluster', to: '/docs/phases/phase-3'},
+            {label: 'Overview', to: '/docs/intro'},
+            {label: 'Engineering cases', to: '/docs/case-studies'},
           ],
         },
         {
@@ -238,8 +224,7 @@ const config: Config = {
           items: [
             {label: 'Journal de bord', to: '/blog'},
             {label: 'GitHub', href: 'https://github.com/yapcyber'},
-            {label: 'LinkedIn', href: 'https://linkedin.com/in/VOTRE_PROFIL_LINKEDIN'},
-            {label: 'RSS Feed', href: '/blog/rss.xml'},
+            {label: 'LinkedIn', href: 'https://fr.linkedin.com/in/yanis-deschamps-892683199'},
           ],
         },
       ],

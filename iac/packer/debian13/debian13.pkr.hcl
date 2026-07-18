@@ -35,8 +35,8 @@ source "proxmox-iso" "debian13" {
   }
 
   network_adapters {
-    model  = "virtio"
-    bridge = "vmbr0"
+    model    = "virtio"
+    bridge   = "vmbr0"
     vlan_tag = "100"
   }
 

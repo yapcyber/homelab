@@ -1,47 +1,34 @@
 ---
 sidebar_position: 1
+title: Homelab engineering portfolio
 ---
 
-# Tutorial Intro
+# From a collection of services to an operated platform
 
-Let's discover **Docusaurus in less than 5 minutes**.
+This homelab is a hands-on engineering environment for infrastructure,
+automation and defensive security. It runs a clustered virtualisation layer,
+segmented networks and self-hosted services, with remote access restricted to a
+private VPN.
 
-## Getting Started
+The interesting part is not the application count. It is the operating model:
+configuration is versioned, changes are validated, exposed container ports are
+filtered, failures are observable, and recovery constraints are documented.
 
-Get started by **creating a new site**.
+## Current capabilities
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+- Infrastructure provisioning with Packer, OpenTofu and Ansible.
+- Reverse proxy, identity, monitoring, logs and vulnerability management.
+- Host and network security telemetry, plus custom detection content.
+- Daily application-aware backups with encrypted sensitive archives.
+- Automated health, certificate, drift and update checks.
 
-### What you'll need
+## Evidence, not a perfect-lab narrative
 
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
+The project records failed assumptions and remaining risks. Local backups are
+not yet an off-site copy. Some application migrations still require a manual,
+staged deployment. Security appliances deliberately keep privileged update
+commands behind interactive administration. These boundaries are treated as
+engineering inputs rather than hidden.
 
-## Generate a new site
-
-Generate a new Docusaurus site using the **classic template**.
-
-The classic template will automatically be added to your project after you run the command:
-
-```bash
-npm init docusaurus@latest my-website classic
-```
-
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
-
-The command also installs all necessary dependencies you need to run Docusaurus.
-
-## Start your site
-
-Run the development server:
-
-```bash
-cd my-website
-npm run start
-```
-
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
-
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
-
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+See the [engineering case studies](./case-studies.md) for examples of diagnosis,
+remediation and lessons learned.
