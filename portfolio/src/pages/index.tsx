@@ -21,7 +21,7 @@ function HomepageHeader() {
           <Link
             className="button button--secondary button--lg"
             to="/docs/intro">
-            Explore the engineering work
+            Explorer le projet
           </Link>
         </div>
       </div>
@@ -33,8 +33,8 @@ export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title="Infrastructure, automation and security engineering"
-      description="A proof-driven homelab portfolio covering infrastructure, operations and defensive security.">
+      title="Infrastructure, automatisation et cybersécurité"
+      description="Un homelab documenté par les preuves, les incidents et les apprentissages.">
       <HomepageHeader />
       <main>
         <HomepageFeatures />

@@ -1,34 +1,35 @@
 ---
 sidebar_position: 1
-title: Homelab engineering portfolio
+title: Le projet YapServer
 ---
 
-# From a collection of services to an operated platform
+# D'une collection de services à une plateforme exploitée
 
-This homelab is a hands-on engineering environment for infrastructure,
-automation and defensive security. It runs a clustered virtualisation layer,
-segmented networks and self-hosted services, with remote access restricted to a
-private VPN.
+YapServer est un laboratoire personnel consacré à l'infrastructure, à
+l'automatisation et à la cybersécurité défensive. Il associe un cluster de
+virtualisation, des réseaux segmentés et des services auto-hébergés accessibles
+à distance uniquement par VPN.
 
-The interesting part is not the application count. It is the operating model:
-configuration is versioned, changes are validated, exposed container ports are
-filtered, failures are observable, and recovery constraints are documented.
+L'intérêt du projet ne réside pas dans le nombre d'applications. Il tient à son
+modèle d'exploitation : configuration versionnée, changements validés, ports
+Docker filtrés, incidents observables et contraintes de reprise documentées.
 
-## Current capabilities
+## Capacités actuelles
 
-- Infrastructure provisioning with Packer, OpenTofu and Ansible.
-- Reverse proxy, identity, monitoring, logs and vulnerability management.
-- Host and network security telemetry, plus custom detection content.
-- Daily application-aware backups with encrypted sensitive archives.
-- Automated health, certificate, drift and update checks.
+- Provisionnement avec Packer, OpenTofu et Ansible.
+- Reverse proxy, identité, supervision, logs et gestion des vulnérabilités.
+- Télémétrie hôte et réseau, complétée par des détections personnalisées.
+- Sauvegardes quotidiennes applicatives et chiffrement des données sensibles.
+- Contrôles automatisés de santé, certificats, dérive Git et mises à jour.
 
-## Evidence, not a perfect-lab narrative
+## Une documentation fondée sur les preuves
 
-The project records failed assumptions and remaining risks. Local backups are
-not yet an off-site copy. Some application migrations still require a manual,
-staged deployment. Security appliances deliberately keep privileged update
-commands behind interactive administration. These boundaries are treated as
-engineering inputs rather than hidden.
+Ce site ne présente pas un laboratoire artificiellement parfait. Les copies de
+sauvegarde hors site restent à consolider. Certaines migrations nécessitent
+encore un déploiement progressif manuel. Les commandes privilégiées des
+appliances de sécurité restent volontairement interactives. Ces limites sont
+des données d'ingénierie, pas des éléments à masquer.
 
-See the [engineering case studies](./case-studies.md) for examples of diagnosis,
-remediation and lessons learned.
+Les [études de cas](./case-studies.md) détaillent plusieurs diagnostics et les
+enseignements qui en ont été tirés. La section [Cybersécurité](./cybersecurite/)
+constitue progressivement un socle de cours par spécialité.

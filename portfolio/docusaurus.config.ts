@@ -16,7 +16,7 @@ const config: Config = {
   // IDENTITÉ DU SITE
   // ===========================================================================
   title: 'YapServer Homelab',
-  tagline: 'Building a production-grade homelab — Cloud, DevOps & Cybersecurity',
+  tagline: 'Construire, sécuriser, comprendre et transmettre',
   favicon: 'img/favicon.ico',
 
   // URL publique du site (utilisée pour les liens canoniques, SEO, sitemap)
@@ -32,8 +32,8 @@ const config: Config = {
   // ===========================================================================
   // INTERNATIONALISATION — FR / EN
   // ===========================================================================
-  // Anglais en langue principale (meilleure portée LinkedIn internationale).
-  // Français disponible via le dropdown de langue dans la navbar.
+  // Le contenu de fond est d'abord consolidé en français. L'anglais sera
+  // réactivé lorsque chaque page structurante aura une traduction relue.
   //
   // FLUX DE TRAVAIL BILINGUE :
   //   1. Écrire le contenu EN dans docs/ et blog/
@@ -41,14 +41,9 @@ const config: Config = {
   //   3. Traduire les fichiers générés dans i18n/fr/
   //   4. Les pages traduites apparaissent sur /fr/...
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en', 'fr'],
+    defaultLocale: 'fr',
+    locales: ['fr'],
     localeConfigs: {
-      en: {
-        label: 'English',
-        direction: 'ltr',
-        htmlLang: 'en-GB',
-      },
       fr: {
         label: 'Français',
         direction: 'ltr',
@@ -184,11 +179,6 @@ const config: Config = {
           label: 'Journal',
           position: 'left',
         },
-        // Sélecteur de langue
-        {
-          type: 'localeDropdown',
-          position: 'right',
-        },
         // Lien GitHub (repo public du homelab)
         {
           href: 'https://github.com/yapcyber/homelab',
@@ -215,12 +205,12 @@ const config: Config = {
         {
           title: 'Homelab',
           items: [
-            {label: 'Overview', to: '/docs/intro'},
-            {label: 'Engineering cases', to: '/docs/case-studies'},
+            {label: 'Présentation', to: '/docs/intro'},
+            {label: 'Études de cas', to: '/docs/case-studies'},
           ],
         },
         {
-          title: 'Follow',
+          title: 'Suivre le projet',
           items: [
             {label: 'Journal de bord', to: '/blog'},
             {label: 'GitHub', href: 'https://github.com/yapcyber'},
@@ -228,7 +218,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Built with Docusaurus · Hosted on a self-built Homelab · © ${new Date().getFullYear()} YapServer`,
+      copyright: `Construit avec Docusaurus · Hébergé sur le homelab · © ${new Date().getFullYear()} YapServer`,
     },
 
     // -------------------------------------------------------------------------

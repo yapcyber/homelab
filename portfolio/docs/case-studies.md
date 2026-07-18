@@ -1,64 +1,64 @@
 ---
 sidebar_position: 2
-title: Engineering case studies
+title: Études de cas
 ---
 
-# Engineering case studies
+# Études de cas d'ingénierie
 
-## Storage failure presented as a network failure
+## Une panne de stockage ressemblait à une panne réseau
 
-**Signal.** Several virtual machines became unreachable at the same time, which
-initially resembled an SSH ban or firewall regression.
+**Signal.** Plusieurs VM deviennent simultanément injoignables, ce qui évoque
+d'abord un bannissement SSH ou une régression du pare-feu.
 
-**Investigation.** Correlating guest-agent failures with blocked hypervisor
-tasks exposed a shared NFS dependency. The network symptoms were downstream of
-storage I/O waits.
+**Investigation.** La corrélation entre l'échec des agents invités et les tâches
+hyperviseur bloquées révèle une dépendance NFS commune. Les symptômes réseau
+sont une conséquence de l'attente d'entrées/sorties.
 
-**Response.** The diagnostic runbook now checks NAS and VM storage before
-changing firewall state. Shutdown handling was hardened and the architectural
-constraint—service disks sharing a temporary storage fault domain—is explicit.
+**Réponse.** Le runbook vérifie désormais NAS et stockage avant de modifier le
+pare-feu. Le démontage à l'arrêt est renforcé et le domaine de panne temporaire
+du stockage est documenté.
 
-**Lesson.** Correlation across layers beats repeated probes at the layer showing
-the symptom.
+**Leçon.** Corréler plusieurs couches est plus efficace que multiplier les
+sondes sur celle qui manifeste le symptôme.
 
-## Docker publishing bypassed the intended trust boundary
+## Les ports Docker contournaient la frontière prévue
 
-**Signal.** Services bound to host ports could be reached outside the reverse
-proxy path even when the host firewall policy appeared restrictive.
+**Signal.** Des services publiés sur l'hôte restent accessibles hors du chemin
+du reverse proxy malgré une politique de pare-feu apparemment restrictive.
 
-**Investigation.** Docker&apos;s forwarding rules were evaluated before the expected
-host input path.
+**Investigation.** Les règles de transfert Docker sont évaluées sur un chemin
+différent de la chaîne d'entrée initialement surveillée.
 
-**Response.** A persistent, inventory-driven `DOCKER-USER` policy now restricts
-published ports to approved proxy and administration sources. Direct Docker
-socket consumers were removed or placed behind a filtered socket proxy.
+**Réponse.** Une politique persistante `DOCKER-USER`, pilotée par inventaire,
+limite les ports aux sources proxy et d'administration autorisées. Les accès
+directs au socket Docker ont été supprimés ou placés derrière un proxy filtrant.
 
-**Lesson.** A control is only real when tested on the packet path actually used.
+**Leçon.** Un contrôle n'existe réellement que s'il est testé sur le chemin
+effectivement emprunté.
 
-## Vulnerability scanner growth exhausted its system disk
+## La croissance du scanner saturait son disque système
 
-**Signal.** The vulnerability platform stayed operational, but its nightly
-database backup began failing with `No space left on device`.
+**Signal.** La plateforme de vulnérabilités reste disponible, mais sa sauvegarde
+nocturne échoue avec `No space left on device`.
 
-**Investigation.** Image cleanup offered no useful reclaim: the space was mostly
-active feed and database data. Backup history added several gigabytes more.
+**Investigation.** Les images sont toutes utilisées ; la place est consommée par
+les feeds, la base active et plusieurs historiques de sauvegarde.
 
-**Response.** The virtual disk and filesystem were expanded online. Daily
-integrity checks now alert on stale or truncated archives, while capacity is
-treated as a growth metric rather than a one-off cleanup target.
+**Réponse.** Disque virtuel et filesystem sont étendus en ligne. Un contrôle
+quotidien alerte désormais sur les archives périmées ou tronquées, tandis que la
+capacité devient une métrique de croissance.
 
-**Lesson.** For data-heavy security tooling, retention and backup capacity must
-be designed together.
+**Leçon.** Pour les outils de sécurité riches en données, rétention et capacité
+de sauvegarde doivent être conçues ensemble.
 
-## Secret handling evolved without breaking access
+## Faire évoluer un secret sans casser l'accès
 
-**Signal.** A privileged web administration token was still represented as a
-reusable plaintext value in runtime configuration.
+**Signal.** Un jeton d'administration web privilégié est représenté par une
+valeur réutilisable en clair dans la configuration d'exécution.
 
-**Response.** It was converted in place to a memory-hard password hash while
-preserving operator access. Public registration was disabled and invitations
-remain available for controlled onboarding.
+**Réponse.** Il est converti en place vers un hash à mémoire dure tout en
+préservant l'accès opérateur. Les inscriptions publiques sont désactivées et les
+invitations permettent l'enrôlement contrôlé.
 
-**Next control.** SOPS with an Age recipient is prepared for encrypted secret
-delivery. The private recovery key remains outside Git and requires independent
-backup.
+**Étape suivante.** SOPS et Age préparent la livraison chiffrée. La clé privée de
+récupération reste hors de Git et doit posséder une sauvegarde indépendante.

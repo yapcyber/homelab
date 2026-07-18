@@ -15,28 +15,28 @@ const FeatureList: FeatureItem[] = [
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Reproducible Proxmox templates and virtual machines with Packer,
-        OpenTofu and Ansible, backed by explicit validation gates.
+        Des templates et VM Proxmox reproductibles avec Packer, OpenTofu et
+        Ansible, contrôlés par des validations explicites.
       </>
     ),
   },
   {
-    title: 'Defence in depth',
+    title: 'Défense en profondeur',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Segmented networks, restricted Docker ingress, central logs,
-        vulnerability scanning and detection engineering.
+        Réseaux segmentés, entrées Docker filtrées, journaux centralisés,
+        analyse de vulnérabilités et ingénierie de détection.
       </>
     ),
   },
   {
-    title: 'Operations that can recover',
+    title: 'Exploitation résiliente',
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Encrypted backups, integrity checks, documented incidents and staged
-        Git-based changes with an explicit rollback path.
+        Sauvegardes chiffrées, contrôles d’intégrité, incidents documentés et
+        changements Git progressifs avec une stratégie de retour arrière.
       </>
     ),
   },
