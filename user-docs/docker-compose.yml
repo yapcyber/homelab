@@ -1,0 +1,29 @@
+services:
+  user-docs:
+    build:
+      context: .
+      target: production
+    image: yapserver/user-docs:local
+    container_name: user-docs
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:mode=1777
+      - /tmp:mode=1777
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-proxy"
+      - "traefik.http.routers.user-docs.rule=Host(`docs.yapserver.fr`)"
+      - "traefik.http.routers.user-docs.entrypoints=websecure"
+      - "traefik.http.routers.user-docs.tls.certresolver=cloudflare"
+      - "traefik.http.routers.user-docs.middlewares=internal-only@file,rate-limit@file"
+      - "traefik.http.services.user-docs.loadbalancer.server.port=8080"
+
+networks:
+  traefik-proxy:
+    external: true
+    name: traefik-proxy

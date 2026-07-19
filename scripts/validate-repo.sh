@@ -28,5 +28,6 @@ while IFS= read -r file; do
   docker compose -f "$file" config --no-interpolate --quiet
 done < <(find services -type f \( -name 'docker-compose.yml' -o -name 'compose.yaml' \) \
   ! -path '*/monitoring/netbox/*' | sort)
+docker compose -f user-docs/docker-compose.yml config --quiet
 
 echo "Préflight réussi."

@@ -27,6 +27,26 @@ jobs:
       - run: npm run build
         working-directory: portfolio
 
+  user-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: user-docs/package-lock.json
+      - run: npm ci
+        working-directory: user-docs
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: user-docs
+      - run: npm run typecheck
+        working-directory: user-docs
+      - run: npm run build
+        working-directory: user-docs
+
   static-validation:
     runs-on: ubuntu-latest
     steps:
@@ -43,5 +63,6 @@ jobs:
             docker compose -f "$file" config --no-interpolate --quiet
           done < <(find services -type f \( -name 'docker-compose.yml' -o -name 'compose.yaml' \) \
             ! -path '*/monitoring/netbox/*' | sort)
+          docker compose -f user-docs/docker-compose.yml config --quiet
       - name: Prevent private prompting context
         run: test -z "$(git ls-files prompting)"
