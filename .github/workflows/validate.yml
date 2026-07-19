@@ -66,3 +66,10 @@ jobs:
           docker compose -f user-docs/docker-compose.yml config --quiet
       - name: Prevent private prompting context
         run: test -z "$(git ls-files prompting)"
+      - name: Validate encrypted secret structure
+        run: |
+          test -z "$(git ls-files ':(glob)**/.env')"
+          while IFS= read -r encrypted_file; do
+            grep -q '^sops_age__list_0__map_recipient=' "$encrypted_file"
+            grep -q '^sops_mac=ENC\[' "$encrypted_file"
+          done < <(find services -type f -name '*.enc.env' | sort)

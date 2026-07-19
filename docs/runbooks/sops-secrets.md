@@ -24,6 +24,22 @@ Le poste de contrôle déchiffre au dernier moment et transfère le secret sur l
 VM cible avec Ansible `no_log: true`, permissions `0600`, sans journaliser sa
 valeur. Une VM de service ne reçoit que les secrets nécessaires à sa pile.
 
+Le rôle générique `sops_env_delivery` ajoute une validation dotenv, compare
+l'empreinte du fichier livré, valide Compose, recrée uniquement la pile ciblée
+et restaure automatiquement l'ancien `.env` en cas d'échec. Les sauvegardes
+temporaires contenant des secrets sont supprimées après une livraison réussie.
+
+Le premier lot applicatif couvre SplitPro, Wanderer, Dawarich et Ghostfolio :
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/sops-deliver-apps.yml
+```
+
+Vaultwarden, Traefik, Authentik, les certificats et les composants réseau sont
+explicitement exclus de cette généralisation et nécessitent une validation
+humaine dédiée avant toute migration.
+
 ## Récupération
 
 La clé privée Age doit avoir deux copies indépendantes : une pièce jointe

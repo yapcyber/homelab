@@ -1,0 +1,141 @@
+---
+- name: Valider la définition de livraison SOPS
+  ansible.builtin.assert:
+    that:
+      - sops_stack.name | length > 0
+      - sops_stack.encrypted_file | length > 0
+      - sops_stack.remote_stack | length > 0
+      - sops_stack.containers | length > 0
+    fail_msg: Définition SOPS incomplète pour une pile.
+
+- name: Déchiffrer le fichier sur le control node uniquement
+  ansible.builtin.set_fact:
+    sops_env_content: >-
+      {{ lookup('ansible.builtin.pipe',
+                'sops --decrypt ' + (sops_stack.encrypted_file | quote)) }}
+  delegate_to: localhost
+  no_log: true
+
+- name: Identifier les lignes dotenv invalides
+  ansible.builtin.set_fact:
+    sops_invalid_env_lines: >-
+      {{ sops_env_content.splitlines()
+         | reject('match', '^\s*(#|$)')
+         | reject('match', '^[A-Za-z_][A-Za-z0-9_]*=.*$')
+         | list }}
+  no_log: true
+
+- name: Valider le contenu dotenv déchiffré
+  ansible.builtin.assert:
+    that:
+      - sops_env_content | length > 0
+      - sops_invalid_env_lines | length == 0
+    fail_msg: "{{ sops_stack.name }} : contenu dotenv vide ou invalide."
+  no_log: true
+
+- name: Calculer l'empreinte attendue
+  ansible.builtin.set_fact:
+    sops_expected_hash: "{{ (sops_env_content + '\n') | hash('sha256') }}"
+  no_log: true
+
+- name: Livrer et valider la pile avec rollback automatique
+  block:
+    - name: Livrer le fichier .env avec permissions minimales
+      ansible.builtin.copy:
+        content: "{{ sops_env_content }}\n"
+        dest: "{{ sops_stack.remote_stack }}/{{ sops_stack.env_file | default('.env') }}"
+        owner: debian
+        group: debian
+        mode: "0600"
+        backup: true
+      register: sops_env_delivery
+      no_log: true
+
+    - name: Vérifier l'empreinte du fichier livré
+      ansible.builtin.stat:
+        path: "{{ sops_stack.remote_stack }}/{{ sops_stack.env_file | default('.env') }}"
+        checksum_algorithm: sha256
+      register: sops_delivered_file
+      no_log: true
+
+    - name: Confirmer l'intégrité de la livraison
+      ansible.builtin.assert:
+        that:
+          - sops_delivered_file.stat.checksum == sops_expected_hash
+        fail_msg: "{{ sops_stack.name }} : empreinte du .env livré incorrecte."
+      no_log: true
+
+    - name: Valider la configuration Compose
+      ansible.builtin.command: docker compose config --quiet
+      args:
+        chdir: "{{ sops_stack.remote_stack }}"
+      changed_when: false
+      no_log: true
+
+    - name: Recréer uniquement les services de la pile
+      ansible.builtin.command:
+        argv: "{{ ['docker', 'compose', 'up', '-d', '--force-recreate'] + sops_stack.services }}"
+      args:
+        chdir: "{{ sops_stack.remote_stack }}"
+      register: sops_compose_up
+      changed_when: true
+      no_log: true
+
+    - name: Attendre le retour à l'état running
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - --format
+          - "{{ '{{' }}.State.Status{{ '}}' }}"
+          - "{{ item }}"
+      loop: "{{ sops_stack.containers }}"
+      register: sops_container_states
+      until: sops_container_states.stdout == 'running'
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    - name: Supprimer la sauvegarde temporaire après validation
+      ansible.builtin.file:
+        path: "{{ sops_env_delivery.backup_file }}"
+        state: absent
+      when: sops_env_delivery.backup_file is defined
+      no_log: true
+
+  rescue:
+    - name: Restaurer le fichier précédent
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ sops_env_delivery.backup_file }}"
+        dest: "{{ sops_stack.remote_stack }}/{{ sops_stack.env_file | default('.env') }}"
+        owner: debian
+        group: debian
+        mode: "0600"
+      when: sops_env_delivery.backup_file is defined
+      no_log: true
+
+    - name: Retirer un fichier nouvellement créé sans prédécesseur
+      ansible.builtin.file:
+        path: "{{ sops_stack.remote_stack }}/{{ sops_stack.env_file | default('.env') }}"
+        state: absent
+      when: sops_env_delivery.backup_file is not defined
+
+    - name: Restaurer les conteneurs avec la configuration précédente
+      ansible.builtin.command:
+        argv: "{{ ['docker', 'compose', 'up', '-d', '--force-recreate'] + sops_stack.services }}"
+      args:
+        chdir: "{{ sops_stack.remote_stack }}"
+      no_log: true
+
+    - name: Signaler l'échec après rollback
+      ansible.builtin.fail:
+        msg: "Livraison SOPS échouée ; rollback appliqué à {{ sops_stack.name }}."
+
+  always:
+    - name: Effacer les secrets des faits Ansible
+      ansible.builtin.set_fact:
+        sops_env_content: ""
+        sops_expected_hash: ""
+        sops_invalid_env_lines: []
+      no_log: true

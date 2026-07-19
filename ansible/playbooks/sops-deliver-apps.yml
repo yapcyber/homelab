@@ -1,0 +1,52 @@
+---
+- name: Livrer les secrets SOPS des applications cloud peu critiques
+  hosts: cloud
+  gather_facts: false
+  serial: 1
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    sops_stacks:
+      - name: SplitPro
+        encrypted_file: "{{ repo_root }}/services/cloud/splitpro/splitpro.enc.env"
+        remote_stack: /home/debian/homelab/services/cloud/splitpro
+        services: [postgres, splitpro]
+        containers: [splitpro-db, splitpro]
+      - name: Wanderer
+        encrypted_file: "{{ repo_root }}/services/cloud/wanderer/wanderer.enc.env"
+        remote_stack: /home/debian/homelab/services/cloud/wanderer
+        services: [search, db, web]
+        containers: [wanderer-search, wanderer-db, wanderer-web]
+      - name: Dawarich
+        encrypted_file: "{{ repo_root }}/services/cloud/dawarich/dawarich.enc.env"
+        remote_stack: /home/debian/homelab/services/cloud/dawarich
+        services: [dawarich_redis, dawarich_db, dawarich_app, dawarich_sidekiq]
+        containers: [dawarich_redis, dawarich_db, dawarich_app, dawarich_sidekiq]
+  tasks:
+    - name: Migrer les piles cloud une par une
+      ansible.builtin.include_role:
+        name: sops_env_delivery
+      loop: "{{ sops_stacks }}"
+      loop_control:
+        loop_var: sops_stack
+        label: "{{ sops_stack.name }}"
+
+- name: Livrer les secrets SOPS de Ghostfolio
+  hosts: firefly
+  gather_facts: false
+  serial: 1
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    sops_stacks:
+      - name: Ghostfolio
+        encrypted_file: "{{ repo_root }}/services/firefly/ghostfolio/ghostfolio.enc.env"
+        remote_stack: /home/debian/homelab/services/firefly/ghostfolio
+        services: [postgres, redis, ghostfolio]
+        containers: [gf-postgres, gf-redis, ghostfolio]
+  tasks:
+    - name: Migrer Ghostfolio
+      ansible.builtin.include_role:
+        name: sops_env_delivery
+      loop: "{{ sops_stacks }}"
+      loop_control:
+        loop_var: sops_stack
+        label: "{{ sops_stack.name }}"

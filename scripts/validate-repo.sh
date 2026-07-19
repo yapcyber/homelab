@@ -11,6 +11,11 @@ find ansible/control-node ansible/roles/scheduled_tasks/files/scripts scripts \
 echo "[2/5] Ansible"
 (cd ansible && ansible-playbook --syntax-check playbooks/baseline.yml >/dev/null)
 (cd ansible && ansible-playbook --syntax-check playbooks/scheduled-tasks.yml >/dev/null)
+(cd ansible && ansible-playbook --syntax-check playbooks/sops-deliver-apps.yml >/dev/null)
+
+while IFS= read -r encrypted_file; do
+  sops --decrypt "$encrypted_file" >/dev/null
+done < <(find services -type f -name '*.enc.env' | sort)
 
 echo "[3/5] OpenTofu"
 tofu -chdir=iac/opentofu fmt -check -recursive
