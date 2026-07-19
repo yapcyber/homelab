@@ -1,0 +1,29 @@
+---
+- name: Retirer le secret SOPS pilote de Navidrome
+  hosts: media
+  gather_facts: false
+  vars:
+    remote_stack: /home/debian/homelab/services/media/navidrome
+  tasks:
+    - name: Retirer uniquement le .env livré
+      ansible.builtin.file:
+        path: "{{ remote_stack }}/.env"
+        state: absent
+
+    - name: Recréer Navidrome sans le canari
+      ansible.builtin.command: docker compose up -d --force-recreate navidrome
+      args:
+        chdir: "{{ remote_stack }}"
+
+    - name: Vérifier que le canari n'est plus injecté
+      ansible.builtin.command: docker exec navidrome printenv SOPS_CANARY
+      register: canary_absent
+      failed_when: canary_absent.rc == 0
+      changed_when: false
+      no_log: true
+
+    - name: Vérifier que Navidrome reste actif
+      ansible.builtin.command: docker inspect -f {{ '{{' }}.State.Status{{ '}}' }} navidrome
+      register: container_state
+      failed_when: container_state.stdout != 'running'
+      changed_when: false

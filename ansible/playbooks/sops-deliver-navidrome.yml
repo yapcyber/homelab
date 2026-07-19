@@ -1,0 +1,110 @@
+---
+- name: Livrer le secret SOPS pilote à Navidrome
+  hosts: media
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    encrypted_file: "{{ repo_root }}/services/media/navidrome/navidrome.enc.env"
+    remote_stack: /home/debian/homelab/services/media/navidrome
+
+  pre_tasks:
+    - name: Déchiffrer sur le control node uniquement
+      ansible.builtin.set_fact:
+        navidrome_env: >-
+          {{ lookup('ansible.builtin.pipe',
+                    'sops --decrypt ' + (encrypted_file | quote)) }}
+      delegate_to: localhost
+      no_log: true
+
+    - name: Valider la forme du secret pilote
+      ansible.builtin.assert:
+        that:
+          - navidrome_env is match('^SOPS_CANARY=[0-9a-f]{64}$')
+        fail_msg: Le fichier déchiffré ne contient pas le canari attendu.
+      no_log: true
+
+    - name: Calculer l'empreinte attendue sans exposer la valeur
+      ansible.builtin.set_fact:
+        expected_canary_hash: >-
+          {{ navidrome_env | regex_replace('^SOPS_CANARY=', '') | hash('sha256') }}
+      no_log: true
+
+  tasks:
+    - name: Déployer et valider avec rollback automatique sur erreur
+      block:
+        - name: Livrer le .env avec permissions minimales
+          ansible.builtin.copy:
+            content: "{{ navidrome_env }}\n"
+            dest: "{{ remote_stack }}/.env"
+            owner: debian
+            group: debian
+            mode: "0600"
+            backup: true
+          register: env_delivery
+          no_log: true
+
+        - name: Valider la configuration Compose
+          ansible.builtin.command: docker compose config --quiet
+          args:
+            chdir: "{{ remote_stack }}"
+          changed_when: false
+
+        - name: Recréer Navidrome avec son environnement livré
+          ansible.builtin.command: docker compose up -d --force-recreate navidrome
+          args:
+            chdir: "{{ remote_stack }}"
+          register: compose_up
+          changed_when: >-
+            'Recreated' in compose_up.stderr or 'Started' in compose_up.stderr
+
+        - name: Attendre que le conteneur soit actif
+          ansible.builtin.command: docker inspect -f {{ '{{' }}.State.Status{{ '}}' }} navidrome
+          register: container_state
+          until: container_state.stdout == 'running'
+          retries: 10
+          delay: 2
+          changed_when: false
+
+        - name: Calculer l'empreinte du canari reçu dans le conteneur
+          ansible.builtin.shell: >-
+            set -o pipefail;
+            docker exec navidrome printenv SOPS_CANARY | tr -d '\n' | sha256sum | cut -d' ' -f1
+          args:
+            executable: /bin/bash
+          register: delivered_canary_hash
+          changed_when: false
+          no_log: true
+
+        - name: Confirmer la livraison sans afficher le secret
+          ansible.builtin.assert:
+            that:
+              - delivered_canary_hash.stdout == expected_canary_hash
+            success_msg: Empreinte du canari Navidrome conforme.
+          no_log: true
+
+      rescue:
+        - name: Restaurer le fichier précédent si une sauvegarde existe
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ env_delivery.backup_file }}"
+            dest: "{{ remote_stack }}/.env"
+            owner: debian
+            group: debian
+            mode: "0600"
+          when: env_delivery.backup_file is defined
+          no_log: true
+
+        - name: Retirer le fichier créé s'il n'existait pas avant
+          ansible.builtin.file:
+            path: "{{ remote_stack }}/.env"
+            state: absent
+          when: env_delivery.backup_file is not defined
+
+        - name: Revenir à la configuration précédente
+          ansible.builtin.command: docker compose up -d --force-recreate navidrome
+          args:
+            chdir: "{{ remote_stack }}"
+
+        - name: Signaler l'échec après rollback
+          ansible.builtin.fail:
+            msg: Livraison SOPS échouée ; rollback Navidrome appliqué.

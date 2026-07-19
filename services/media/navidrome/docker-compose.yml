@@ -11,6 +11,11 @@ services:
     container_name: navidrome
     restart: unless-stopped
     user: "1000:1000"
+    # Fichier livré par le control node après déchiffrement SOPS. Optionnel pour
+    # permettre un rollback propre vers la configuration sans secret pilote.
+    env_file:
+      - path: .env
+        required: false
     environment:
       - ND_SCANSCHEDULE=@every 1h
       - ND_LOGLEVEL=info
