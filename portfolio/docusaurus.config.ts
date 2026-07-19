@@ -20,7 +20,7 @@ const config: Config = {
   favicon: 'img/favicon.ico',
 
   // URL publique du site (utilisée pour les liens canoniques, SEO, sitemap)
-  url: 'https://yapserver.fr',
+  url: 'https://portfolio.yapserver.fr',
   baseUrl: '/',
 
   // Lien vers le repo GitHub (utilisé par les boutons "Edit this page")

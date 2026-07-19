@@ -10,10 +10,10 @@
 #
 # FLUX D'UNE REQUÊTE EXTERNE :
 #
-#   Visiteur → yapserver.fr (DNS Cloudflare)
+#   Visiteur → portfolio.yapserver.fr (DNS Cloudflare)
 #       → Réseau Cloudflare
 #       → Tunnel cloudflared (connexion SORTANTE permanente, port 443 outbound)
-#       → Traefik (router : host = yapserver.fr)
+#       → Traefik (router : host = portfolio.yapserver.fr)
 #       → Container portfolio (nginx :80)
 #
 # POURQUOI CLOUDFLARE TUNNEL ET PAS UNE IP PUBLIQUE ?
@@ -26,9 +26,8 @@
 #   1. https://dash.cloudflare.com → Zero Trust → Networks → Tunnels
 #   2. "Create a tunnel" → Type "Cloudflared" → Nommer le tunnel "homelab"
 #   3. Copier le token généré dans .env (CLOUDFLARE_TUNNEL_TOKEN)
-#   4. Configurer les "Public Hostnames" dans l'interface Cloudflare :
-#      - yapserver.fr → http://traefik:80 (header Host: yapserver.fr)
-#      - www.yapserver.fr → http://traefik:80 (header Host: yapserver.fr)
+#   4. Configurer le "Public Hostname" dans l'interface Cloudflare :
+#      - portfolio.yapserver.fr → http://traefik:80 (header Host: portfolio.yapserver.fr)
 #
 # PRÉ-REQUIS :
 #   cd portfolio && npm run build   (génère le dossier build/)
@@ -61,15 +60,11 @@ services:
 
       # Portfolio = seul service avec certificat Let's Encrypt Cloudflare
       # ET accessible publiquement (pas de middleware internal-only)
-      - "traefik.http.routers.portfolio.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+      # Servi sur le sous-domaine portfolio.yapserver.fr (apex laissé libre)
+      - "traefik.http.routers.portfolio.rule=Host(`portfolio.${DOMAIN}`)"
       - "traefik.http.routers.portfolio.entrypoints=websecure"
       - "traefik.http.routers.portfolio.tls.certresolver=cloudflare"
-
-      # Redirection www → apex (ex: www.yapserver.fr → yapserver.fr)
-      - "traefik.http.middlewares.portfolio-www.redirectregex.regex=^https://www\\.(.+)"
-      - "traefik.http.middlewares.portfolio-www.redirectregex.replacement=https://$${1}"
-      - "traefik.http.middlewares.portfolio-www.redirectregex.permanent=true"
-      - "traefik.http.routers.portfolio.middlewares=portfolio-www,rate-limit@file"
+      - "traefik.http.routers.portfolio.middlewares=rate-limit@file"
 
       - "traefik.http.services.portfolio.loadbalancer.server.port=80"
 
