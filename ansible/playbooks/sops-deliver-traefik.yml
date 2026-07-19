@@ -1,0 +1,219 @@
+---
+- name: Livrer le bundle SOPS critique de Traefik
+  hosts: infra
+  gather_facts: false
+  serial: 1
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    encrypted_env: "{{ repo_root }}/services/infra/traefik/traefik.enc.env"
+    encrypted_runtime: "{{ repo_root }}/services/infra/traefik/traefik-runtime.enc.env"
+    remote_stack: /home/debian/homelab/services/infra/traefik
+
+  pre_tasks:
+    - name: Vérifier la présence d'une sauvegarde Traefik récente
+      ansible.builtin.find:
+        paths: /var/backups/homelab
+        patterns: traefik.tar.gz.enc
+        recurse: true
+        age: -2d
+        file_type: file
+      become: true
+      register: traefik_backups
+
+    - name: Refuser la migration sans sauvegarde récente
+      ansible.builtin.assert:
+        that:
+          - traefik_backups.matched | int > 0
+        fail_msg: Aucune sauvegarde Traefik chiffrée de moins de 48 h.
+
+    - name: Vérifier les trois fichiers cibles existants
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ remote_stack }}/.env"
+        - "{{ remote_stack }}/dynamic/secrets/traefik_users"
+        - "{{ remote_stack }}/dynamic/secrets/crowdsec_lapikey"
+      register: traefik_initial_files
+      no_log: true
+
+    - name: Refuser un bundle initial incomplet
+      ansible.builtin.assert:
+        that:
+          - traefik_initial_files.results | map(attribute='stat.exists') | min
+        fail_msg: Un fichier secret Traefik initial est absent ; migration annulée.
+
+    - name: Déchiffrer le dotenv Traefik sur le control node
+      ansible.builtin.set_fact:
+        traefik_env_content: >-
+          {{ lookup('ansible.builtin.pipe', 'sops --decrypt ' + (encrypted_env | quote)) }}
+        traefik_runtime_content: >-
+          {{ lookup('ansible.builtin.pipe', 'sops --decrypt ' + (encrypted_runtime | quote)) }}
+      delegate_to: localhost
+      no_log: true
+
+    - name: Extraire les fichiers runtime encodés
+      ansible.builtin.set_fact:
+        traefik_users_content: >-
+          {{ (traefik_runtime_content
+              | regex_search('(?m)^TRAEFIK_USERS_B64=(.+)$', '\1')
+              | first) | b64decode }}
+        crowdsec_lapikey_content: >-
+          {{ (traefik_runtime_content
+              | regex_search('(?m)^CROWDSEC_LAPIKEY_B64=(.+)$', '\1')
+              | first) | b64decode }}
+      no_log: true
+
+    - name: Valider le bundle déchiffré
+      ansible.builtin.assert:
+        that:
+          - traefik_env_content | length > 0
+          - traefik_users_content is match('^[^:\n]+:\$2[aby]\$[^\n]+$')
+          - crowdsec_lapikey_content is match('^[^\r\n]{20,}$')
+        fail_msg: Bundle Traefik vide ou invalide.
+      no_log: true
+
+  tasks:
+    - name: Livrer et valider Traefik avec rollback automatique
+      block:
+        - name: Livrer le dotenv Traefik
+          ansible.builtin.copy:
+            content: "{{ traefik_env_content }}\n"
+            dest: "{{ remote_stack }}/.env"
+            owner: debian
+            group: debian
+            mode: "0600"
+            backup: true
+          register: traefik_env_delivery
+          no_log: true
+
+        - name: Livrer le fichier BasicAuth
+          ansible.builtin.copy:
+            content: "{{ traefik_users_content }}\n"
+            dest: "{{ remote_stack }}/dynamic/secrets/traefik_users"
+            owner: debian
+            group: debian
+            mode: "0600"
+            backup: true
+          register: traefik_users_delivery
+          no_log: true
+
+        - name: Livrer la clé LAPI CrowdSec
+          ansible.builtin.copy:
+            content: "{{ crowdsec_lapikey_content }}\n"
+            dest: "{{ remote_stack }}/dynamic/secrets/crowdsec_lapikey"
+            owner: debian
+            group: debian
+            mode: "0600"
+            backup: true
+          register: crowdsec_key_delivery
+          no_log: true
+
+        - name: Valider la configuration Compose
+          ansible.builtin.command: docker compose config --quiet
+          args:
+            chdir: "{{ remote_stack }}"
+          changed_when: false
+          no_log: true
+
+        - name: Recréer uniquement Traefik
+          ansible.builtin.command: docker compose up -d --force-recreate --no-deps traefik
+          args:
+            chdir: "{{ remote_stack }}"
+          changed_when: true
+          no_log: true
+
+        - name: Attendre le healthcheck Traefik
+          ansible.builtin.command:
+            argv:
+              - docker
+              - inspect
+              - --format
+              - "{{ '{{' }}.State.Status{{ '}}' }}/{{ '{{' }}.State.Health.Status{{ '}}' }}"
+              - traefik
+          register: traefik_state
+          until: traefik_state.stdout == 'running/healthy'
+          retries: 45
+          delay: 2
+          changed_when: false
+
+        - name: Valider les routes critiques derrière Traefik
+          ansible.builtin.uri:
+            url: "{{ item.url }}"
+            method: GET
+            follow_redirects: none
+            status_code: "{{ item.status }}"
+            validate_certs: true
+          loop:
+            - { url: "https://vault.yapserver.fr/alive", status: [200] }
+            - { url: "https://auth.yapserver.fr/", status: [200, 302] }
+            - { url: "https://docs.yapserver.fr/", status: [200] }
+          delegate_to: localhost
+          become: false
+
+        - name: Valider le dashboard avec résolution DNS forcée
+          ansible.builtin.command:
+            argv:
+              - curl
+              - --silent
+              - --show-error
+              - --output
+              - /dev/null
+              - --write-out
+              - "%{http_code}"
+              - --resolve
+              - traefik.yapserver.fr:443:10.0.30.10
+              - https://traefik.yapserver.fr/dashboard/
+          delegate_to: localhost
+          become: false
+          register: traefik_dashboard_status
+          changed_when: false
+          failed_when: traefik_dashboard_status.stdout != '401'
+
+        - name: Supprimer les sauvegardes temporaires après validation
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: >-
+            {{ [traefik_env_delivery.backup_file | default(''),
+                traefik_users_delivery.backup_file | default(''),
+                crowdsec_key_delivery.backup_file | default('')]
+               | reject('equalto', '') | list }}
+          no_log: true
+
+      rescue:
+        - name: Restaurer les fichiers précédents disponibles
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ item.backup }}"
+            dest: "{{ item.dest }}"
+            owner: debian
+            group: debian
+            mode: "0600"
+          loop:
+            - backup: "{{ traefik_env_delivery.backup_file | default('') }}"
+              dest: "{{ remote_stack }}/.env"
+            - backup: "{{ traefik_users_delivery.backup_file | default('') }}"
+              dest: "{{ remote_stack }}/dynamic/secrets/traefik_users"
+            - backup: "{{ crowdsec_key_delivery.backup_file | default('') }}"
+              dest: "{{ remote_stack }}/dynamic/secrets/crowdsec_lapikey"
+          when: item.backup | length > 0
+          no_log: true
+
+        - name: Redémarrer Traefik avec le bundle précédent
+          ansible.builtin.command: docker compose up -d --force-recreate --no-deps traefik
+          args:
+            chdir: "{{ remote_stack }}"
+          no_log: true
+
+        - name: Signaler l'échec après rollback
+          ansible.builtin.fail:
+            msg: Livraison SOPS échouée ; rollback Traefik appliqué.
+
+      always:
+        - name: Effacer le bundle des faits Ansible
+          ansible.builtin.set_fact:
+            traefik_env_content: ""
+            traefik_runtime_content: ""
+            traefik_users_content: ""
+            crowdsec_lapikey_content: ""
+          no_log: true

@@ -53,6 +53,27 @@ cd ~/homelab/ansible
 ansible-playbook playbooks/sops-deliver-vaultwarden.yml
 ```
 
+## Authentik et Traefik — procédures critiques
+
+Authentik exige un dump PostgreSQL chiffré de moins de 48 heures, attend les
+quatre healthchecks et valide sa route HTTPS :
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/sops-deliver-authentik.yml
+```
+
+Traefik utilise deux sources chiffrées : son dotenv et un bundle runtime pour
+le BasicAuth bcrypt et la clé LAPI CrowdSec. Le playbook exige une sauvegarde
+récente, livre les trois fichiers en `0600`, ne recrée que Traefik, puis teste
+Vaultwarden, Authentik, Docusaurus et le dashboard avant de supprimer les
+sauvegardes temporaires :
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/sops-deliver-traefik.yml
+```
+
 ## Récupération
 
 La clé privée Age doit avoir deux copies indépendantes : une pièce jointe

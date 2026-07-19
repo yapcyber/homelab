@@ -1,0 +1,50 @@
+---
+- name: Livrer les secrets SOPS critiques d'Authentik
+  hosts: infra
+  gather_facts: false
+  serial: 1
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    sops_stacks:
+      - name: Authentik
+        encrypted_file: "{{ repo_root }}/services/infra/authentik/authentik.enc.env"
+        remote_stack: /home/debian/homelab/services/infra/authentik
+        services:
+          - authentik-postgresql
+          - authentik-redis
+          - authentik-server
+          - authentik-worker
+        containers:
+          - authentik-postgresql
+          - authentik-redis
+          - authentik-server
+          - authentik-worker
+        require_healthy: true
+        health_retries: 60
+        healthcheck_url: https://auth.yapserver.fr/
+        healthcheck_status: [200, 302]
+  pre_tasks:
+    - name: Vérifier la présence d'un dump Authentik récent
+      ansible.builtin.find:
+        paths: /var/backups/homelab
+        patterns: authentik-db.sql.gz.enc
+        recurse: true
+        age: -2d
+        file_type: file
+      become: true
+      register: authentik_backups
+
+    - name: Refuser la migration sans dump récent
+      ansible.builtin.assert:
+        that:
+          - authentik_backups.matched | int > 0
+        fail_msg: Aucun dump Authentik chiffré de moins de 48 h.
+
+  tasks:
+    - name: Migrer Authentik avec contrôles renforcés
+      ansible.builtin.include_role:
+        name: sops_env_delivery
+      loop: "{{ sops_stacks }}"
+      loop_control:
+        loop_var: sops_stack
+        label: "{{ sops_stack.name }}"

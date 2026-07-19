@@ -102,7 +102,7 @@
       until:
         - sops_container_states.stdout is match('^running (healthy|none)$')
         - not (sops_stack.require_healthy | default(false) | bool) or sops_container_states.stdout == 'running healthy'
-      retries: 30
+      retries: "{{ sops_stack.health_retries | default(30) }}"
       delay: 2
       changed_when: false
 
