@@ -36,9 +36,22 @@ cd ~/homelab/ansible
 ansible-playbook playbooks/sops-deliver-apps.yml
 ```
 
-Vaultwarden, Traefik, Authentik, les certificats et les composants réseau sont
+Traefik, Authentik, les certificats et les composants réseau restent
 explicitement exclus de cette généralisation et nécessitent une validation
-humaine dédiée avant toute migration.
+humaine dédiée avant toute migration. Vaultwarden dispose de la procédure
+critique distincte ci-dessous.
+
+## Vaultwarden — procédure critique
+
+Vaultwarden utilise le même rôle, mais son playbook exige en plus une sauvegarde
+chiffrée de moins de 48 heures, attend un conteneur `healthy` et teste
+`https://vault.yapserver.fr/alive`. Son exécution doit rester explicitement
+autorisée :
+
+```bash
+cd ~/homelab/ansible
+ansible-playbook playbooks/sops-deliver-vaultwarden.yml
+```
 
 ## Récupération
 

@@ -40,6 +40,12 @@
 
 - name: Livrer et valider la pile avec rollback automatique
   block:
+    - name: Relever l'état initial du fichier cible
+      ansible.builtin.stat:
+        path: "{{ sops_stack.remote_stack }}/{{ sops_stack.env_file | default('.env') }}"
+      register: sops_env_initial
+      no_log: true
+
     - name: Livrer le fichier .env avec permissions minimales
       ansible.builtin.copy:
         content: "{{ sops_env_content }}\n"
@@ -81,20 +87,36 @@
       changed_when: true
       no_log: true
 
-    - name: Attendre le retour à l'état running
+    - name: Attendre le retour à l'état attendu
       ansible.builtin.command:
         argv:
           - docker
           - inspect
           - --format
-          - "{{ '{{' }}.State.Status{{ '}}' }}"
+          - >-
+            {{ '{{' }}.State.Status{{ '}}' }}
+            {{ '{{' }}if .State.Health{{ '}}' }}{{ '{{' }}.State.Health.Status{{ '}}' }}{{ '{{' }}else{{ '}}' }}none{{ '{{' }}end{{ '}}' }}
           - "{{ item }}"
       loop: "{{ sops_stack.containers }}"
       register: sops_container_states
-      until: sops_container_states.stdout == 'running'
+      until:
+        - sops_container_states.stdout is match('^running (healthy|none)$')
+        - not (sops_stack.require_healthy | default(false) | bool) or sops_container_states.stdout == 'running healthy'
       retries: 30
       delay: 2
       changed_when: false
+
+    - name: Valider la route HTTP de la pile
+      ansible.builtin.uri:
+        url: "{{ sops_stack.healthcheck_url }}"
+        method: GET
+        follow_redirects: none
+        status_code: "{{ sops_stack.healthcheck_status | default([200]) }}"
+        validate_certs: true
+      delegate_to: localhost
+      become: false
+      when: sops_stack.healthcheck_url is defined
+      register: sops_http_check
 
     - name: Supprimer la sauvegarde temporaire après validation
       ansible.builtin.file:
@@ -119,7 +141,9 @@
       ansible.builtin.file:
         path: "{{ sops_stack.remote_stack }}/{{ sops_stack.env_file | default('.env') }}"
         state: absent
-      when: sops_env_delivery.backup_file is not defined
+      when:
+        - not (sops_env_initial.stat.exists | default(false))
+        - sops_env_delivery.backup_file is not defined
 
     - name: Restaurer les conteneurs avec la configuration précédente
       ansible.builtin.command:

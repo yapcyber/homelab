@@ -1,0 +1,41 @@
+---
+- name: Livrer le secret SOPS critique de Vaultwarden
+  hosts: cloud
+  gather_facts: false
+  serial: 1
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    sops_stacks:
+      - name: Vaultwarden
+        encrypted_file: "{{ repo_root }}/services/cloud/vaultwarden/vaultwarden.enc.env"
+        remote_stack: /home/debian/homelab/services/cloud/vaultwarden
+        services: [vaultwarden]
+        containers: [vaultwarden]
+        require_healthy: true
+        healthcheck_url: https://vault.yapserver.fr/alive
+        healthcheck_status: [200]
+  pre_tasks:
+    - name: Vérifier la présence d'une sauvegarde Vaultwarden récente
+      ansible.builtin.find:
+        paths: /var/backups/homelab
+        patterns: vaultwarden-data.tar.gz.enc
+        recurse: true
+        age: -2d
+        file_type: file
+      become: true
+      register: vaultwarden_backups
+
+    - name: Refuser la migration sans sauvegarde récente
+      ansible.builtin.assert:
+        that:
+          - vaultwarden_backups.matched | int > 0
+        fail_msg: Aucune sauvegarde Vaultwarden chiffrée de moins de 48 h.
+
+  tasks:
+    - name: Migrer Vaultwarden avec contrôles renforcés
+      ansible.builtin.include_role:
+        name: sops_env_delivery
+      loop: "{{ sops_stacks }}"
+      loop_control:
+        loop_var: sops_stack
+        label: "{{ sops_stack.name }}"
