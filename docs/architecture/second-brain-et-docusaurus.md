@@ -6,8 +6,9 @@ Le second brain utilisera **SilverBullet** comme espace privé de travail. Son
 stockage en fichiers Markdown limite l'enfermement propriétaire, facilite les
 sauvegardes et permet de promouvoir ensuite une note mûre vers Docusaurus.
 
-Docusaurus reste la publication publique : récit du homelab, retours
-d'expérience et cours relus. Il ne devient pas l'éditeur de notes quotidiennes.
+Deux Docusaurus ont des finalités distinctes : `portfolio.yapserver.fr` raconte
+le homelab et publie les cours cyber ; `docs.yapserver.fr` aide les utilisateurs
+des services. Aucun des deux ne devient l'éditeur de notes quotidiennes.
 
 ```mermaid
 flowchart LR
@@ -17,13 +18,14 @@ flowchart LR
   V --> B[Backup chiffré hors VM]
   S -->|promotion manuelle| G[Dépôt Git]
   G --> C[CI Docusaurus]
-  C --> P[Site portfolio]
+  C --> P[portfolio.yapserver.fr]
+  C --> D[docs.yapserver.fr]
 ```
 
 ## Implantation proposée
 
 - VM cible : `cloud`, sauf si son niveau de charge impose une petite VM dédiée.
-- URL privée : `brain.yapserver.fr`, résolue uniquement sur le réseau interne.
+- URL privée : `secondbrain.yapserver.fr`, résolue uniquement sur le réseau interne.
 - Entrée : Traefik, allowlist WireGuard et LAN d'administration.
 - Authentification : forward-auth Authentik avec MFA ; authentification native
   SilverBullet conservée comme seconde barrière tant que son comportement avec
@@ -64,7 +66,8 @@ second brain doit rester privé et ne remplace pas une sauvegarde.
 ## Phases
 
 1. Sauvegarder les clés Age/backup dans Vaultwarden et hors ligne.
-2. Déployer une instance vide, VPN-only, puis tester Authentik et la restauration.
+2. Déployer une instance vide sur `secondbrain.yapserver.fr`, VPN-only, puis
+   tester Authentik et la restauration.
 3. Importer un petit lot pilote et stabiliser taxonomie/templates pendant un mois.
 4. Automatiser le backup et seulement ensuite importer le reste du savoir.
 5. Construire un flux éditorial contrôlé vers Docusaurus.
