@@ -47,11 +47,13 @@ done
 [ -n "${ok}" ] || { echo "VM injoignable après ~5 min — vérifie la console Proxmox (VM 111 / pve1)."; exit 1; }
 
 # ---------------------------------------------------------------------------
-log "4/7  Contrôles DMZ : egress Internet + isolation VLAN 30"
-if ssh "${SSH_OPTS[@]}" "${DMZ_SSH}" 'curl -sS -m 8 -o /dev/null https://github.com'; then
-  echo "  egress Internet : OK"
+log "4/7  Contrôles DMZ : DNS + egress Internet + isolation VLAN 30"
+# Le template ne pose pas le DNS sur IP statique -> on le fixe avant tout test
+ssh "${SSH_OPTS[@]}" "${DMZ_SSH}" 'grep -q "^nameserver" /etc/resolv.conf || { echo "nameserver 10.0.40.1" | sudo tee /etc/resolv.conf.head >/dev/null; echo "nameserver 10.0.40.1" | sudo tee -a /etc/resolv.conf >/dev/null; }'
+if ssh "${SSH_OPTS[@]}" "${DMZ_SSH}" 'ping -c1 -W3 1.1.1.1 >/dev/null 2>&1 && curl -sS -m 8 -o /dev/null https://github.com'; then
+  echo "  DNS + egress Internet : OK"
 else
-  echo "  !! PAS d'egress Internet en VLAN 40 → configure OPNsense (sortie 443 + pulls). Déploiement stoppé."
+  echo "  !! PAS d'egress Internet en VLAN 40 (ou DNS 10.0.40.1 KO) → configure OPNsense (sortie 443 + pulls). Déploiement stoppé."
   exit 1
 fi
 if ssh "${SSH_OPTS[@]}" "${DMZ_SSH}" 'curl -sS -m 5 -o /dev/null https://10.0.30.10' 2>/dev/null; then
@@ -64,7 +66,12 @@ fi
 log "5/7  Repo + secret tunnel (SOPS → .env 0600)"
 ssh "${SSH_OPTS[@]}" "${DMZ_SSH}" '
   set -e
-  command -v git >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq git; }
+  sudo cloud-init status --wait >/dev/null 2>&1 || true
+  # git absent du template ; attendre le lock apt (unattended-upgrades au boot)
+  command -v git >/dev/null || {
+    sudo apt-get -o DPkg::Lock::Timeout=600 update -qq
+    sudo apt-get -o DPkg::Lock::Timeout=600 install -y -qq git
+  }
   [ -d ~/homelab/.git ] || git clone --depth 1 https://github.com/yapcyber/homelab.git ~/homelab
   cd ~/homelab && git fetch -q origin && git reset --hard origin/main
 '

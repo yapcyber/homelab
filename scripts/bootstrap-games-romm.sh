@@ -64,10 +64,20 @@ done
 [ -n "${ok}" ] || { echo "VM injoignable après ~5 min — vérifie la console Proxmox (VM 112 / pve2)."; exit 1; }
 
 # ---------------------------------------------------------------------------
-log "4/7  Repo homelab sur la VM"
+log "4/7  Repo homelab sur la VM (fix DNS template + install git)"
 ssh "${SSH_OPTS[@]}" "${GAMES_SSH}" '
   set -e
-  command -v git >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq git; }
+  # Le template doré ne pose pas le DNS sur IP statique -> resolv.conf sans nameserver
+  grep -q "^nameserver" /etc/resolv.conf || {
+    echo "nameserver 10.0.30.1" | sudo tee /etc/resolv.conf.head >/dev/null
+    echo "nameserver 10.0.30.1" | sudo tee -a /etc/resolv.conf >/dev/null
+  }
+  sudo cloud-init status --wait >/dev/null 2>&1 || true
+  # git absent du template ; attendre le lock apt (unattended-upgrades au boot)
+  command -v git >/dev/null || {
+    sudo apt-get -o DPkg::Lock::Timeout=600 update -qq
+    sudo apt-get -o DPkg::Lock::Timeout=600 install -y -qq git
+  }
   [ -d ~/homelab/.git ] || git clone --depth 1 https://github.com/yapcyber/homelab.git ~/homelab
   cd ~/homelab && git fetch -q origin && git reset --hard origin/main
 '
