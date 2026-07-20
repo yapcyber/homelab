@@ -1,0 +1,15 @@
+http:
+  routers:
+    romm:
+      rule: "Host(`romm.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      # VPN-only : service perso, accès via WireGuard/Admin uniquement
+      middlewares: [internal-only@file]
+      service: romm-svc
+
+  services:
+    romm-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.20:8080"

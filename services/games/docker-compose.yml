@@ -1,0 +1,66 @@
+# =============================================================================
+# services/games/docker-compose.yml — RomM (gestionnaire de ROMs) — VM games (VLAN 30)
+# =============================================================================
+# Déployé sur 10.0.30.20. Accès VPN-only via Traefik (dynamic/romm.yml,
+# internal-only) → http://10.0.30.20:8080.
+#
+# Secrets (DB + ROMM_AUTH_SECRET_KEY) livrés via SOPS (games.enc.env → .env 0600),
+# jamais committés en clair. IGDB/ScreenScraper optionnels (Hasheous par défaut).
+#
+# Bibliothèque de ROMs : ./library (bind local). ⚠️ disque template = 20 G →
+# pour une vraie collection, pointer /romm/library vers le NAS/SMB (à trancher).
+# =============================================================================
+
+services:
+  romm:
+    image: rommapp/romm:latest   # à épingler par digest (Renovate)
+    container_name: romm
+    restart: unless-stopped
+    depends_on:
+      romm-db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=romm-db
+      - DB_NAME=romm
+      - DB_USER=romm-user
+      - DB_PASSWD=${DB_PASSWD}
+      - ROMM_AUTH_SECRET_KEY=${ROMM_AUTH_SECRET_KEY}
+      - HASHEOUS_API_ENABLED=true
+    volumes:
+      - romm_resources:/romm/resources
+      - romm_redis_data:/redis-data
+      - ./library:/romm/library
+      - ./assets:/romm/assets
+      - ./config:/romm/config
+    ports:
+      - "8080:8080"          # atteint par Traefik ; filtré par docker_ingress_filter
+    networks:
+      - romm
+
+  romm-db:
+    image: mariadb:latest    # à épingler (Renovate)
+    container_name: romm-db
+    restart: unless-stopped
+    environment:
+      - MARIADB_DATABASE=romm
+      - MARIADB_USER=romm-user
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - romm
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  romm_resources:
+  romm_redis_data:
+  mysql_data:
+
+networks:
+  romm:
