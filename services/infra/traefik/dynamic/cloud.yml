@@ -18,13 +18,16 @@ http:
       rule: "Host(`cloud.yapserver.fr`)"
       entrypoints: [websecure]
       tls: {certResolver: cloudflare}
-      middlewares: [nextcloud-redirect@file]
+      # VPN-only : accès famille via WireGuard uniquement (retiré du tunnel public)
+      middlewares: [internal-only@file, nextcloud-redirect@file]
       service: nextcloud-svc
 
     immich:
       rule: "Host(`photos.yapserver.fr`)"
       entrypoints: [websecure]
       tls: {certResolver: cloudflare}
+      # VPN-only : accès via WireGuard uniquement (jamais dans le tunnel public)
+      middlewares: [internal-only@file]
       service: immich-svc
 
     jellyfin:
