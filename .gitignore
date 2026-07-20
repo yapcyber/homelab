@@ -8,6 +8,7 @@
 secrets/
 .env
 .env.prod
+.cloudflare_token
 .env.test
 .env.local
 *.key
