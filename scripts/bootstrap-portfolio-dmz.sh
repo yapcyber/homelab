@@ -80,6 +80,8 @@ sops -d "${REPO}/portfolio/portfolio.enc.env" | \
 
 # ---------------------------------------------------------------------------
 log "6/7  Build + démarrage (nginx + cloudflared)"
+# Buffers UDP pour QUIC (cloudflared) — sinon paquets perdus sous la charge parallèle d'un navigateur
+ssh "${SSH_OPTS[@]}" "${DMZ_SSH}" 'printf "net.core.rmem_max=7500000\nnet.core.wmem_max=7500000\n" | sudo tee /etc/sysctl.d/99-quic-buffers.conf >/dev/null; sudo /usr/sbin/sysctl -q -p /etc/sysctl.d/99-quic-buffers.conf'
 ssh "${SSH_OPTS[@]}" "${DMZ_SSH}" 'cd ~/homelab/portfolio && docker compose up -d --build'
 
 # ---------------------------------------------------------------------------
