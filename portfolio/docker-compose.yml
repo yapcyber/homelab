@@ -1,114 +1,60 @@
 # =============================================================================
-# portfolio/docker-compose.yml
-# Phase 1.2 — Portfolio Docusaurus + Cloudflare Tunnel
+# portfolio/docker-compose.yml — Portfolio public en DMZ (VLAN 40)
 # =============================================================================
+# Déployé sur la VM DMZ (10.0.40.20), ISOLÉE du VLAN 30.
 #
-# DEUX SERVICES DANS CE COMPOSE :
+#   portfolio (nginx) : sert le site statique Docusaurus (build multi-stage).
+#   cloudflared       : connecteur du tunnel « portfolio-homelab ». Il n'atteint
+#                       QUE le nginx local (http://portfolio:80) — aucun accès au
+#                       VLAN 30, pas de Traefik dans la boucle.
 #
-#   portfolio   → Sert le site statique Docusaurus via nginx
-#   cloudflared → Tunnel sortant vers Cloudflare (Zero Trust)
+# Flux : Visiteur → Cloudflare (TLS + WAF au bord) → tunnel → cloudflared → nginx.
 #
-# FLUX D'UNE REQUÊTE EXTERNE :
+# À configurer côté Cloudflare (tunnel portfolio-homelab) :
+#   Public Hostname : portfolio.yapserver.fr → http://portfolio:80
 #
-#   Visiteur → portfolio.yapserver.fr (DNS Cloudflare)
-#       → Réseau Cloudflare
-#       → Tunnel cloudflared (connexion SORTANTE permanente, port 443 outbound)
-#       → Traefik (router : host = portfolio.yapserver.fr)
-#       → Container portfolio (nginx :80)
-#
-# POURQUOI CLOUDFLARE TUNNEL ET PAS UNE IP PUBLIQUE ?
-#   → Zéro port ouvert en entrée sur la box FAI (aucune règle de port forwarding)
-#   → Protection DDoS Cloudflare offerte gratuitement
-#   → Accès HTTPS valide même avec une IP FAI dynamique
-#   → La box FAI peut changer d'IP → le tunnel continue de fonctionner
-#
-# OBTENIR LE TOKEN DU TUNNEL (Phase 4) :
-#   1. https://dash.cloudflare.com → Zero Trust → Networks → Tunnels
-#   2. "Create a tunnel" → Type "Cloudflared" → Nommer le tunnel "homelab"
-#   3. Copier le token généré dans .env (CLOUDFLARE_TUNNEL_TOKEN)
-#   4. Configurer le "Public Hostname" dans l'interface Cloudflare :
-#      - portfolio.yapserver.fr → http://traefik:80 (header Host: portfolio.yapserver.fr)
-#
-# PRÉ-REQUIS :
-#   cd portfolio && npm run build   (génère le dossier build/)
-#   cp .env.example .env && remplir CLOUDFLARE_TUNNEL_TOKEN
+# Secret : CLOUDFLARE_TUNNEL_TOKEN livré via SOPS (portfolio.enc.env → .env 0600),
+#          jamais committé en clair.
 # =============================================================================
 
 services:
 
-  # ===========================================================================
-  # PORTFOLIO — Site statique Docusaurus servi par nginx
-  # ===========================================================================
-  # Le site est PRÉ-COMPILÉ (npm run build → dossier build/) puis servi par nginx.
-  # nginx est plus performant que le serveur de dev Node.js pour la production.
-  # Compilation à faire sur le Mini PC 5, les fichiers build/ sont copiés sur la VM.
-  # En Phase 4 : utiliser le Dockerfile multi-stage pour automatiser ça.
+  # ---------------------------------------------------------------------------
+  # PORTFOLIO — site statique Docusaurus servi par nginx (port 80)
+  # ---------------------------------------------------------------------------
   portfolio:
     build:
       context: .
       dockerfile: Dockerfile
       target: production
+    image: yapserver/portfolio:local
     container_name: portfolio
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     networks:
-      - traefik-proxy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-proxy"
-
-      # Portfolio = seul service avec certificat Let's Encrypt Cloudflare
-      # ET accessible publiquement (pas de middleware internal-only)
-      # Servi sur le sous-domaine portfolio.yapserver.fr (apex laissé libre)
-      - "traefik.http.routers.portfolio.rule=Host(`portfolio.${DOMAIN}`)"
-      - "traefik.http.routers.portfolio.entrypoints=websecure"
-      - "traefik.http.routers.portfolio.tls.certresolver=cloudflare"
-      - "traefik.http.routers.portfolio.middlewares=rate-limit@file"
-
-      - "traefik.http.services.portfolio.loadbalancer.server.port=80"
-
+      - dmz
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ > /dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
 
-  # ===========================================================================
-  # CLOUDFLARED — Tunnel Cloudflare Zero Trust
-  # ===========================================================================
-  # Établit une connexion SORTANTE permanente vers le réseau Cloudflare.
-  # Ne nécessite aucun port ouvert en entrée — connexion entièrement initiée
-  # par ce container (TCP 443 sortant vers *.argotunnel.com).
-  #
-  # Ce container est idéalement déployé sur la même VM que Traefik (VLAN 40 DMZ).
-  # Pour cette raison, il pourra être déplacé dans services/infra/traefik/ en Phase 4.
-  # Il est ici pour la Phase 1.2 (préparation fichiers) et sera configuré en Phase 4.
+  # ---------------------------------------------------------------------------
+  # CLOUDFLARED — connecteur du tunnel, ne joint que le nginx local
+  # ---------------------------------------------------------------------------
   cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
+    image: cloudflare/cloudflared:2026.5.2
+    container_name: portfolio-cloudflared
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-
-    # Le tunnel s'authentifie avec ce token (obtenu depuis le dashboard Cloudflare)
-    # et maintient la connexion vers l'infrastructure Cloudflare automatiquement.
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-
-    environment:
-      - TZ=${TZ}
-
+    depends_on:
+      - portfolio
     networks:
-      - traefik-proxy   # Doit pouvoir joindre Traefik pour lui forwarder le trafic
-
-    healthcheck:
-      test: ["CMD", "cloudflared", "tunnel", "info"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - dmz
 
 networks:
-  traefik-proxy:
-    external: true
-    name: traefik-proxy
+  dmz:
+    driver: bridge
