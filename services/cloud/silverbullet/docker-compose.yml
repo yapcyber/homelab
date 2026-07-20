@@ -1,0 +1,28 @@
+# =============================================================================
+# services/cloud/silverbullet/docker-compose.yml — SilverBullet (second brain privé)
+# =============================================================================
+# VM cloud (10.0.30.12). Accès VPN-only via Traefik (dynamic/secondbrain.yml,
+# internal-only) → http://10.0.30.12:3003.
+#
+# Notes en Markdown dans ./space (disque LOCAL de la VM, pas NFS), pour éviter
+# l'enfermement propriétaire et faciliter la sauvegarde. Base de connaissance
+# HORS SECRET : une note contient au plus le nom d'un élément Vaultwarden.
+#
+# Auth phase 1 : native SilverBullet (SB_USER, livré par SOPS, jamais en clair
+# dans Git). Phase 2 prévue : forward-auth Authentik + MFA (après validation du
+# comportement de SilverBullet derrière le proxy).
+# =============================================================================
+
+services:
+  silverbullet:
+    image: ghcr.io/silverbulletmd/silverbullet:2.9.0   # à épingler par digest (Renovate)
+    container_name: silverbullet
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - SB_USER=${SB_USER}          # auth native user:password (source SOPS)
+    volumes:
+      - ./space:/space              # notes Markdown, disque local
+    ports:
+      - "3003:3000"                 # atteint par Traefik ; filtré par docker_ingress_filter

@@ -1,0 +1,16 @@
+http:
+  routers:
+    secondbrain:
+      rule: "Host(`secondbrain.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      # VPN-only : second brain privé, accès WireGuard/Admin uniquement.
+      # Phase 2 : ajouter authentik@file (forward-auth + MFA) après validation.
+      middlewares: [internal-only@file, security-headers@file]
+      service: secondbrain-svc
+
+  services:
+    secondbrain-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:3003"
