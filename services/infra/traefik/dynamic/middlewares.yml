@@ -188,6 +188,7 @@ http:
           - "10.0.10.0/24"     # Management
           - "10.0.100.0/24"    # Admin
           - "10.0.200.0/24"    # Clients WireGuard VPN
+          - "10.0.30.11/32"    # Uptime Kuma (monitoring) — sondes de disponibilité internes
           - "127.0.0.1/32"     # Loopback
 
     # =========================================================================
