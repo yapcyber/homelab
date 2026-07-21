@@ -1,0 +1,31 @@
+# =============================================================================
+# services/cloud/siyuan/docker-compose.yml — SiYuan (second brain, block-based)
+# =============================================================================
+# VM cloud (10.0.30.12). Accès VPN-only via Traefik (dynamic/secondbrain.yml,
+# internal-only) + SSO/MFA Authentik (forward-auth, provider secondbrain-proxy,
+# groupe admins) → http://10.0.30.12:6806.
+#
+# Workspace block-based (.sy + assets) dans ./workspace (disque LOCAL de la VM,
+# pas NFS), pour faciliter la sauvegarde chiffrée hors-Git. Base de connaissance
+# HORS SECRET : une note contient au plus le nom d'un élément Vaultwarden.
+#
+# Auth : Authentik forward-auth (SSO+MFA) devant + code d'accès natif SiYuan
+# (--accessAuthCode, livré par SOPS) que SiYuan impose en mode serveur.
+# =============================================================================
+services:
+  siyuan:
+    image: b3log/siyuan:latest        # à épingler par digest (Renovate)
+    container_name: siyuan
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"                 # non-root ; ./workspace est chown 1000:1000
+    command:
+      - "--workspace=/siyuan/workspace/"
+      - "--accessAuthCode=${SIYUAN_ACCESS_AUTH_CODE}"   # code d'accès (source SOPS)
+    environment:
+      - TZ=Europe/Paris
+    volumes:
+      - ./workspace:/siyuan/workspace  # notes block-based, disque local
+    ports:
+      - "6806:6806"                    # atteint par Traefik ; filtré par docker_ingress_filter

@@ -1,0 +1,4 @@
+# Notes personnelles du second brain — JAMAIS dans Git (repo public).
+# Contenu privé + état SiYuan. Sauvegardé chiffré hors-Git.
+workspace/
+.env
