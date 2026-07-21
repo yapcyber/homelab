@@ -17,3 +17,13 @@ services:
       - "3001:3001"
     environment:
       - TZ=Europe/Paris
+    networks:
+      # default = son propre réseau ; monitoring = réseau partagé (Grafana, Prometheus…)
+      # pour sonder les backends co-localisés par nom de conteneur (ex. http://grafana:3000).
+      - default
+      - monitoring
+
+networks:
+  monitoring:
+    external: true
+    name: monitoring
