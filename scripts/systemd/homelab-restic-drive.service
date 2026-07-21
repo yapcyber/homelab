@@ -1,0 +1,9 @@
+[Unit]
+Description=Sauvegarde hors-site homelab vers Google Drive (restic)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Unité UTILISATEUR (systemctl --user) : utilise ~/.ssh, ~/.config/rclone, ~/.config/sops
+ExecStart=%h/homelab/scripts/backup-restic-drive.sh

@@ -1,0 +1,10 @@
+[Unit]
+Description=Planifie la sauvegarde hors-site homelab (Drive/restic)
+
+[Timer]
+OnCalendar=*-*-* 13:00
+Persistent=true          # rattrape l'exécution manquée si le poste était éteint
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target
