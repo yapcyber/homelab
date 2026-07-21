@@ -23,6 +23,8 @@ services:
     environment:
       - SB_USER=${SB_USER}          # auth native user:password (source SOPS)
       - SB_SHELL_BACKEND=off        # sécurité : pas d'exécution de commandes shell dans le conteneur
+      - PUID=1000                   # durcissement : exécution NON-root (uid/gid debian) ; ./space est chown 1000:1000
+      - PGID=1000
     volumes:
       - ./space:/space              # notes Markdown, disque local
     ports:
