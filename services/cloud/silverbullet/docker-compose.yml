@@ -22,6 +22,7 @@ services:
       - no-new-privileges:true
     environment:
       - SB_USER=${SB_USER}          # auth native user:password (source SOPS)
+      - SB_SHELL_BACKEND=off        # sécurité : pas d'exécution de commandes shell dans le conteneur
     volumes:
       - ./space:/space              # notes Markdown, disque local
     ports:
