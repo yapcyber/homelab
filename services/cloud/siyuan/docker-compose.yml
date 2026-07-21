@@ -21,8 +21,11 @@ services:
     # démarrer en root PUIS lâche les privilèges vers uid 1000 lui-même. Ne pas
     # figer 'user:' (casse l'entrypoint). ./workspace est chown 1000:1000.
     command:
+      - "serve"                       # sous-commande : démarre le serveur HTTP du kernel
       - "--workspace=/siyuan/workspace/"
       - "--accessAuthCode=${SIYUAN_ACCESS_AUTH_CODE}"   # code d'accès (source SOPS)
+      - "--port=6806"                 # port fixe (défaut = auto)
+      - "--lang=fr"
     environment:
       - TZ=Europe/Paris
       - PUID=1000                     # exécution non-root après drop de privilèges
