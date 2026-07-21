@@ -5,8 +5,8 @@ http:
       entrypoints: [websecure]
       tls: {certResolver: cloudflare}
       # VPN-only (internal-only) + SSO/MFA Authentik (forward-auth, provider secondbrain-proxy,
-      # restreint au groupe admins). Authentik est le SEUL gardien : l'auth native SilverBullet
-      # a été retirée (pas de double login) ; SilverBullet est ouvert derrière le proxy.
+      # restreint au groupe admins). Backend = SiYuan, qui impose en plus son propre code
+      # d'accès en mode serveur (double couche : Authentik SSO/MFA + code SiYuan).
       middlewares: [internal-only@file, authentik@file, security-headers@file]
       service: secondbrain-svc
       priority: 10
@@ -23,4 +23,4 @@ http:
     secondbrain-svc:
       loadBalancer:
         servers:
-          - url: "http://10.0.30.12:3003"
+          - url: "http://10.0.30.12:6806"
