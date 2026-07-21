@@ -17,6 +17,8 @@ services:
     image: b3log/siyuan:latest        # à épingler par digest (Renovate)
     container_name: siyuan
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true        # OK : gosu (root→1000) ne "gagne" pas de privilège
     # L'entrypoint SiYuan crée l'utilisateur (PUID/PGID) au démarrage : il doit
     # démarrer en root PUIS lâche les privilèges vers uid 1000 lui-même. Ne pas
     # figer 'user:' (casse l'entrypoint). ./workspace est chown 1000:1000.
