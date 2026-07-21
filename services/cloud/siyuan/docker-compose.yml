@@ -17,14 +17,16 @@ services:
     image: b3log/siyuan:latest        # à épingler par digest (Renovate)
     container_name: siyuan
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    user: "1000:1000"                 # non-root ; ./workspace est chown 1000:1000
+    # L'entrypoint SiYuan crée l'utilisateur (PUID/PGID) au démarrage : il doit
+    # démarrer en root PUIS lâche les privilèges vers uid 1000 lui-même. Ne pas
+    # figer 'user:' (casse l'entrypoint). ./workspace est chown 1000:1000.
     command:
       - "--workspace=/siyuan/workspace/"
       - "--accessAuthCode=${SIYUAN_ACCESS_AUTH_CODE}"   # code d'accès (source SOPS)
     environment:
       - TZ=Europe/Paris
+      - PUID=1000                     # exécution non-root après drop de privilèges
+      - PGID=1000
     volumes:
       - ./workspace:/siyuan/workspace  # notes block-based, disque local
     ports:
