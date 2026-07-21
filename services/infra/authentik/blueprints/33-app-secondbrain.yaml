@@ -1,6 +1,8 @@
 # SilverBullet (second brain) — proxy provider (forward-auth) + application + restriction au groupe "admins".
 # Second brain PRIVÉ : réservé aux admins (Yanis). client_secret + property_mappings
 # omis : auto-gérés par l'embedded outpost, préservés à l'apply.
+# client_id : auto-généré par Authentik pour un proxyprovider (interne outpost<->authentik) ;
+# valeur figée ici pour refléter l'état réel et la reproductibilité (DR).
 version: 1
 metadata:
   name: app-secondbrain-proxy
@@ -13,7 +15,7 @@ entries:
       name: secondbrain-proxy
       mode: forward_single
       external_host: https://secondbrain.yapserver.fr
-      client_id: h2LyDm0KAx6BL513a3DJfl1nE9fEFarwMIKywQwC
+      client_id: GZImNCfaTApaKD6kHrPxJsD6gEK6m1D5SS6CZxx9
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
   - id: app-secondbrain
