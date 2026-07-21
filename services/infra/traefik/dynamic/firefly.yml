@@ -2,11 +2,20 @@ http:
   routers:
     firefly:
       rule: "Host(`firefly.yapserver.fr`)"
-      entryPoints: [websecure]
-      tls:
-        certResolver: cloudflare
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
       middlewares: [internal-only@file, authentik@file]
       service: firefly-svc
+      priority: 10
+
+    # Callback/handshake de l'outpost Authentik (obligatoire en forward_single)
+    firefly-outpost:
+      rule: "Host(`firefly.yapserver.fr`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      service: authentik-outpost-svc
+      priority: 20
+
   services:
     firefly-svc:
       loadBalancer:

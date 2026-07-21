@@ -6,6 +6,15 @@ http:
       tls: {certResolver: cloudflare}
       middlewares: [internal-only@file, authentik@file]
       service: readeck-svc
+      priority: 10
+
+    # Callback/handshake de l'outpost Authentik (obligatoire en forward_single)
+    readeck-outpost:
+      rule: "Host(`readeck.yapserver.fr`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      service: authentik-outpost-svc
+      priority: 20
 
   services:
     readeck-svc:

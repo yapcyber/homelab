@@ -6,6 +6,15 @@ http:
       tls: {certResolver: cloudflare}
       middlewares: [internal-only@file, authentik@file]
       service: ghostfolio-svc
+      priority: 10
+
+    # Callback/handshake de l'outpost Authentik (obligatoire en forward_single)
+    ghostfolio-outpost:
+      rule: "Host(`ghostfolio.yapserver.fr`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      service: authentik-outpost-svc
+      priority: 20
 
   services:
     ghostfolio-svc:
