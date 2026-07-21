@@ -5,8 +5,8 @@ http:
       entrypoints: [websecure]
       tls: {certResolver: cloudflare}
       # VPN-only (internal-only) + SSO/MFA Authentik (forward-auth, provider secondbrain-proxy,
-      # restreint au groupe admins). SilverBullet garde son auth native derrière (défense en
-      # profondeur) tant que le comportement derrière le proxy n'est pas validé.
+      # restreint au groupe admins). Authentik est le SEUL gardien : l'auth native SilverBullet
+      # a été retirée (pas de double login) ; SilverBullet est ouvert derrière le proxy.
       middlewares: [internal-only@file, authentik@file, security-headers@file]
       service: secondbrain-svc
       priority: 10

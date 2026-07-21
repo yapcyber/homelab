@@ -8,9 +8,10 @@
 # l'enfermement propriétaire et faciliter la sauvegarde. Base de connaissance
 # HORS SECRET : une note contient au plus le nom d'un élément Vaultwarden.
 #
-# Auth phase 1 : native SilverBullet (SB_USER, livré par SOPS, jamais en clair
-# dans Git). Phase 2 prévue : forward-auth Authentik + MFA (après validation du
-# comportement de SilverBullet derrière le proxy).
+# Auth : Authentik forward-auth (SSO + MFA TOTP, groupe admins) est le SEUL gardien,
+# posé par Traefik (dynamic/secondbrain.yml, middleware authentik@file). L'auth native
+# SilverBullet (SB_USER) a été RETIRÉE pour éviter le double login — SilverBullet est
+# ouvert derrière le proxy, protégé par : VPN (internal-only) + Authentik + filtre de port.
 # =============================================================================
 
 services:
@@ -21,7 +22,7 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      - SB_USER=${SB_USER}          # auth native user:password (source SOPS)
+      # Pas de SB_USER : auth native retirée, l'accès est gardé par Authentik (voir en-tête).
       - SB_SHELL_BACKEND=off        # sécurité : pas d'exécution de commandes shell dans le conteneur
       - PUID=1000                   # durcissement : exécution NON-root (uid/gid debian) ; ./space est chown 1000:1000
       - PGID=1000
