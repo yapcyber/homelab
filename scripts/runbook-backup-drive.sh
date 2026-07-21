@@ -55,8 +55,10 @@ if rclone listremotes 2>/dev/null | grep -qx "${RCLONE_REMOTE}:"; then
 else
   cat <<EOF
   → Le remote n'existe pas. Lancement de 'rclone config'.
-    Réponds :  n → nom: ${RCLONE_REMOTE} → storage: drive → client_id/secret: vide
-               → scope: drive.file → root_folder_id/service_account: vide
+    ⚠️ Crée d'abord ton client OAuth Google perso (voir docs/runbooks/sauvegarde-restic-drive.md) :
+       le client partagé de rclone est saturé et fait échouer restic init (403 rateLimitExceeded).
+    Réponds :  n → nom: ${RCLONE_REMOTE} → storage: drive → client_id/secret: LES TIENS
+               → scope: drive → root_folder_id/service_account: vide
                → advanced: n → auto config: y (autorise dans le navigateur)
                → team drive: n → q (quitter)
 EOF

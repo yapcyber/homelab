@@ -26,14 +26,28 @@ Rétention : **7 quotidiennes / 4 hebdo / 6 mensuelles par hôte**, puis `restic
 
     sudo apt install -y rclone restic
 
-### 2. Remote rclone vers Google Drive (OAuth, navigateur)
+### 2. Client OAuth Google PERSONNEL (obligatoire pour restic)
+
+⚠️ Ne PAS laisser `client_id`/`client_secret` vides : le client OAuth **partagé** de
+rclone est saturé (quota par minute mutualisé entre tous les utilisateurs) et
+`restic init` échoue en `403 rateLimitExceeded`. Crée ton propre client (5 min, une fois) :
+
+1. https://console.cloud.google.com/ → **Nouveau projet** (ex. `rclone-homelab`).
+2. **APIs & Services → Bibliothèque** → active **Google Drive API**.
+3. **APIs & Services → Écran de consentement OAuth** → type **External** → nom + ton email
+   → **ajoute-toi comme Test user** → puis **Publier l'application** (« In production »),
+   sinon le jeton expire au bout de **7 jours**.
+4. **APIs & Services → Identifiants → Créer → ID client OAuth** → type **Application de bureau**
+   → copie le **Client ID** et le **Client secret**.
+
+### 3. Remote rclone vers Google Drive
 
     rclone config
 
 - `n` (new remote) → name : **`gdrive`**
 - Storage : **`drive`** (Google Drive)
-- `client_id` / `client_secret` : vide (ou crée les tiens pour de meilleurs quotas)
-- scope : **`drive.file`** (rclone n'accède qu'aux fichiers qu'il crée — plus sûr)
+- `client_id` / `client_secret` : **colle les tiens** (étape 2)
+- scope : **`drive`** (accès complet — plus fiable pour restic ; `drive.file` possible mais capricieux)
 - `root_folder_id`, `service_account_file` : vide
 - Edit advanced config : `n`
 - Use auto config : `y` → connecte-toi à Google dans le navigateur, autorise
