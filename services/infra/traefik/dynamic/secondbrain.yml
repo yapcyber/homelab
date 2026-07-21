@@ -4,10 +4,20 @@ http:
       rule: "Host(`secondbrain.yapserver.fr`)"
       entrypoints: [websecure]
       tls: {certResolver: cloudflare}
-      # VPN-only : second brain privé, accès WireGuard/Admin uniquement.
-      # Phase 2 : ajouter authentik@file (forward-auth + MFA) après validation.
-      middlewares: [internal-only@file, security-headers@file]
+      # VPN-only (internal-only) + SSO/MFA Authentik (forward-auth, provider secondbrain-proxy,
+      # restreint au groupe admins). SilverBullet garde son auth native derrière (défense en
+      # profondeur) tant que le comportement derrière le proxy n'est pas validé.
+      middlewares: [internal-only@file, authentik@file, security-headers@file]
       service: secondbrain-svc
+      priority: 10
+
+    # Route le handshake/callback de l'outpost vers Authentik (obligatoire en forward_single)
+    secondbrain-outpost:
+      rule: "Host(`secondbrain.yapserver.fr`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      service: authentik-outpost-svc
+      priority: 20
 
   services:
     secondbrain-svc:
