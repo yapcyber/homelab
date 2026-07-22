@@ -11,5 +11,5 @@ backup_jobs:
   20-ghostfolio-db: |
     docker exec gf-postgres sh -c 'pg_dumpall -U "$POSTGRES_USER"' | gzip > "$DAILY/ghostfolio-db.sql.gz"
   90-envs: |
-    { find /home/debian/firefly -maxdepth 1 \( -name ".*env*" -o -name "*.pem" \) ; find /home/debian/homelab/services/firefly -maxdepth 2 -name ".env" ; } | tar czf - -T - 2>/dev/null | enc > "$DAILY/envs.tar.gz.enc"
+    find /home/debian/homelab/services/firefly -maxdepth 1 \( -name ".*env*" -o -name "*.pem" \) | tar czf - -T - 2>/dev/null | enc > "$DAILY/envs.tar.gz.enc"
 docker_restricted_ports: [3333, 8080, 8081]
