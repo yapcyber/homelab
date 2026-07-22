@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Verrou pull read-only : ce dépôt (sur une VM) ne doit recevoir QUE des pulls.
+# Les commits se font depuis l'EliteBook (control node), jamais sur une VM.
+# (Cause de l'incident du 22 juin : commits faits directement sur la VM infra.)
+echo "❌  Dépôt en PULL LECTURE-SEULE (VM homelab)." >&2
+echo "    Fais tes commits depuis l'EliteBook, puis 'homelab-pull'." >&2
+echo "    (Contournement d'urgence assumé : git commit --no-verify)" >&2
+exit 1

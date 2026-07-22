@@ -19,6 +19,21 @@
     mode: "0644"
   notify: daemon-reload
 
+# Verrou pull read-only : hook git qui refuse les commits directs sur la VM
+- name: Détecter le clone git de la VM
+  ansible.builtin.stat:
+    path: /home/debian/homelab/.git/hooks
+  register: vm_git_hooks
+
+- name: Hook pre-commit (dépôt VM en pull lecture-seule — refuse les commits locaux)
+  ansible.builtin.copy:
+    src: git-hooks/pre-commit
+    dest: /home/debian/homelab/.git/hooks/pre-commit
+    owner: debian
+    group: debian
+    mode: "0755"
+  when: vm_git_hooks.stat.exists
+
 # Sauvegardes : clé de chiffrement + jobs
 - name: Clé de chiffrement des sauvegardes (générée une fois, à copier dans Vaultwarden)
   ansible.builtin.shell: umask 077 && openssl rand -hex 32 > /etc/homelab-backup.key
