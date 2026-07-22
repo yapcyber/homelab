@@ -84,7 +84,16 @@ OK=0; SKIP=0; FAIL=0
 for entry in "${HOSTS[@]}"; do
   host="${entry%% *}"; ip="${entry##* }"
   printf '• %-11s (%s) ... ' "$host" "$ip"
-  latest="$(ssh "${SSH_OPTS[@]}" "debian@$ip" 'sudo sh -c "ls -1 /var/backups/homelab/daily 2>/dev/null | sort | tail -1"' 2>/dev/null)"
+  # Détection avec 3 tentatives : résiste aux glitches SSH transitoires.
+  latest=""; rc=1
+  for try in 1 2 3; do
+    latest="$(ssh "${SSH_OPTS[@]}" "debian@$ip" 'sudo sh -c "ls -1 /var/backups/homelab/daily 2>/dev/null | sort | tail -1"' 2>/dev/null)"; rc=$?
+    [ "$rc" -eq 0 ] && break
+    sleep 2
+  done
+  # rc≠0 = SSH/sudo en échec (injoignable) → ÉCHEC bruyant, jamais un skip silencieux.
+  if [ "$rc" -ne 0 ]; then echo "⚠️ ÉCHEC (injoignable/SSH) — NON copié"; FAIL=$((FAIL+1)); continue; fi
+  # rc=0 mais vide = hôte joignable sans sauvegarde (skip légitime).
   if [ -z "$latest" ]; then echo "aucun backup — ignoré"; SKIP=$((SKIP+1)); continue; fi
 
   if ! ssh "${SSH_OPTS[@]}" "debian@$ip" "sudo tar cf - -C /var/backups/homelab/daily '$latest'" > "$DEST/$host.tar" 2>/dev/null; then
