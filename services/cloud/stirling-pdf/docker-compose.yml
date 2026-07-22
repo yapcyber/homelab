@@ -1,0 +1,23 @@
+# =============================================================================
+# services/cloud/stirling-pdf/docker-compose.yml — Stirling PDF (boîte à outils PDF)
+# =============================================================================
+# VM cloud (10.0.30.12). Accès VPN-only via Traefik (dynamic/stirling.yml,
+# internal-only) → http://10.0.30.12:8081. Traite des documents localement,
+# rien n'est envoyé à l'extérieur.
+# =============================================================================
+services:
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest   # à épingler par digest (Renovate)
+    container_name: stirling-pdf
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - DOCKER_ENABLE_SECURITY=false   # pas de login natif : accès gardé par Traefik (VPN + à venir SSO)
+      - SYSTEM_DEFAULTLOCALE=fr-FR
+      - LANGS=fr_FR,en_GB              # langues OCR proposées
+    volumes:
+      - ./data/configs:/configs        # réglages persistants
+      - ./data/logs:/logs
+    ports:
+      - "8081:8080"                    # atteint par Traefik ; filtré par docker_ingress_filter

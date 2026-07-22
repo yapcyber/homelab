@@ -1,0 +1,15 @@
+http:
+  routers:
+    stirling:
+      rule: "Host(`pdf.yapserver.fr`)"
+      entrypoints: [websecure]
+      tls: {certResolver: cloudflare}
+      # VPN-only (internal-only). SSO Authentik possible en phase 2 (cf. recette forward-auth).
+      middlewares: [internal-only@file, security-headers@file]
+      service: stirling-svc
+
+  services:
+    stirling-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:8081"
