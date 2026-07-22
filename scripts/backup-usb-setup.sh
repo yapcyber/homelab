@@ -36,7 +36,10 @@ RM="$(lsblk -dno RM "/dev/$BASE" 2>/dev/null | tr -d ' ')"
 if lsblk -no MOUNTPOINT "$DEV" 2>/dev/null | grep -qE '^/($|boot|home)'; then
   die "$DEV semble monté sur un point système. Refus."
 fi
-echo "$DEV" | grep -qE 'nvme|/dev/sda$' && die "Refus : $DEV ressemble à un disque interne. Vérifie avec 'lsblk'."
+# Refuser explicitement le disque qui porte la racine / (garde-fou robuste, indépendant du nommage)
+ROOTDISK="$(lsblk -no PKNAME "$(findmnt -no SOURCE / 2>/dev/null)" 2>/dev/null | head -1)"
+[ -n "$ROOTDISK" ] && [ "$BASE" = "$ROOTDISK" ] && die "Refus : $DEV contient le système (racine /)."
+echo "$DEV" | grep -qE 'nvme|mmcblk' && die "Refus : $DEV ressemble à un disque interne. Vérifie avec 'lsblk'."
 
 echo "=============================================================="
 echo "  Périphérique cible :"
@@ -45,6 +48,9 @@ echo "=============================================================="
 echo "⚠️  TOUT le contenu de $DEV va être EFFACÉ et chiffré en LUKS2."
 read -r -p "   Tape exactement 'EFFACER $DEV' pour confirmer : " CONFIRM
 [ "$CONFIRM" = "EFFACER $DEV" ] || die "Confirmation incorrecte. Abandon (rien n'a été touché)."
+
+echo "→ Démontage des partitions éventuelles de $DEV ..."
+lsblk -lnpo NAME "$DEV" | tail -n +2 | while read -r part; do sudo umount "$part" 2>/dev/null || true; done
 
 echo "→ Formatage LUKS2 (choisis une passphrase solide) ..."
 sudo cryptsetup luksFormat --type luks2 "$DEV"
