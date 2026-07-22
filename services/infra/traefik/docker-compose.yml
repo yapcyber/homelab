@@ -108,7 +108,7 @@ services:
   # des milliers d'autres instances CrowdSec dans le monde.
   # ===========================================================================
   crowdsec:
-    image: crowdsecurity/crowdsec:latest
+    image: crowdsecurity/crowdsec@sha256:2f527c9bb8b367120eb08b82890aa912ce96bfa1ada93dda0721700e4b4e0dde   # épinglé par digest (Renovate)
     container_name: crowdsec
     restart: unless-stopped
     security_opt:

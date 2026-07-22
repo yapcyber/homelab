@@ -1,6 +1,6 @@
 services:
   app:
-    image: fireflyiii/core:latest
+    image: fireflyiii/core:v6.6.3@sha256:4d63328dbc7c60ef5a8269bb2ee89f120b28f88eb0395e4211e23f93fd79337f   # épinglé version+digest (Renovate)
     restart: unless-stopped
     env_file: .env
     volumes: [ "upload:/var/www/html/storage/upload" ]
@@ -12,7 +12,7 @@ services:
     env_file: .db.env
     volumes: [ "db:/var/lib/mysql" ]
   importer:
-    image: fireflyiii/data-importer:latest
+    image: fireflyiii/data-importer:v2.3.2@sha256:4e2cbcb0d95c34850534a3772f1732c00f6412077db33b1863703a1b628bdc12   # épinglé version+digest (Renovate)
     restart: unless-stopped
     env_file: .importer.env
     volumes: [ "./enablebanking.pem:/eb.pem:ro" ]

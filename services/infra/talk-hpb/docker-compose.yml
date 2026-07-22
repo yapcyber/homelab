@@ -9,7 +9,7 @@
 # =============================================================================
 services:
   talk-hpb:
-    image: ghcr.io/nextcloud-releases/aio-talk:latest   # TODO backlog: epingler (comme traefik)
+    image: ghcr.io/nextcloud-releases/aio-talk@sha256:98ca38b5caf0cbe93749a490baf765967522cbe883bac929dcaef447dd3b8dca   # épinglé par digest (Renovate)
     container_name: nextcloud-talk-hpb
     restart: unless-stopped
     environment:
