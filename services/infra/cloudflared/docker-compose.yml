@@ -1,0 +1,17 @@
+# =============================================================================
+# services/infra/cloudflared/docker-compose.yml — Tunnel Cloudflare (VM infra)
+# =============================================================================
+# Tunnel sortant token-based : cloudflared se connecte à Cloudflare et route les
+# "public hostnames" configurés côté dashboard Cloudflare vers les origines internes.
+# Aucun port entrant ouvert. Le token (TUNNEL_TOKEN) vit dans .env (gitignoré),
+# lu par cloudflared via la variable d'environnement (pas sur la ligne de commande).
+# =============================================================================
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2026.5.2@sha256:12ff5c6992a9863db4da270746af7c244bcaee49353039af8104268a18d6c4f0   # épinglé version+digest (Renovate)
+    container_name: cloudflared
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: tunnel --no-autoupdate run
+    env_file: .env          # TUNNEL_TOKEN

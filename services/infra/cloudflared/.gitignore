@@ -1,0 +1,2 @@
+# Token du tunnel Cloudflare — jamais dans Git (provisionné sur la VM).
+.env
