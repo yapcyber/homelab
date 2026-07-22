@@ -120,7 +120,8 @@ Git / Renovate -> validation -> pull VM -> déploiement contrôlé
 - Ansible gère le patching, les snapshots pré-maintenance, la journalisation
   Docker, les sauvegardes et les timers de sécurité ;
 - Renovate ouvre les mises à jour, avec validation manuelle des majeures ;
-- les VMs applicatives font uniquement des pulls en lecture ;
+- les VMs applicatives font uniquement des pulls en lecture, garanti par un hook
+  `pre-commit` (verrou pull read-only) et une détection quotidienne de dérive hors-repo ;
 - la généralisation d'OpenTofu aux VMs de production et la CI de validation
   restent à réaliser.
 
@@ -174,6 +175,7 @@ homelab/
 |-- scripts/                # outils d'exploitation ponctuels
 |-- services/
 |   |-- cloud/              # Nextcloud, Immich, Vaultwarden, HA, etc.
+|   |-- deploiements-amont/ # configs non-secrètes + README des 4 VM à stacks amont
 |   |-- firefly/            # Firefly III et Ghostfolio
 |   |-- infra/              # Traefik, Authentik, Homarr, NetBox, Talk HPB
 |   |-- media/              # Jellyfin, arr, musique et lecture
