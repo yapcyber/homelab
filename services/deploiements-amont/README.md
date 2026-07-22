@@ -16,7 +16,7 @@ read-only** et hors du flux GitOps classique. Ce dossier versionne leurs
 | security | .14 | Wazuh single-node | `~/wazuh-docker` (clone upstream) | `wazuh-etc` + `wazuh-deploy` |
 | scanner  | .15 | Greenbone CE | `~/greenbone-community-container` | `gvmd-db` + `greenbone-deploy` |
 | osint    | .17 | SpiderFoot | `~/osint` (+ build `spiderfoot:local`) | `osint` |
-| ir       | .18 | TheHive + Cortex | `~/docker` (IaC maison multi-env) | `ir-config` |
+| ir       | .18 | TheHive + Cortex | `~/docker` (IaC maison multi-env) | `ir-config` + `ir-cassandra` + `ir-thehive-files` + `ir-cortex-es` |
 
 ---
 
@@ -55,7 +55,20 @@ read-only** et hors du flux GitOps classique. Ce dossier versionne leurs
 - **Conteneurs** : `thehive`, `cortex`, `cassandra`, `elasticsearch`, `cortex-elasticsearch`, `nginx`.
 - **Secrets non versionnés** → dans `ir-config.tar.gz.enc` : `prod1-thehive/.env`,
   `cortex/application.conf` (clé Play + accès ES).
-- **Reproduire** : restaurer les configs, remplir un `.env` à partir du `dot.env.template`
-  correspondant (`UID/GID`, `elasticsearch_password`, …), `docker compose up -d`.
-  ⚠️ Les **données** Cassandra/ES (~800 Mo) ne sont pas dans `ir-config` — sauvegarde
-  de données applicative = chantier à part.
+- **Sauvegarde des données** (jobs `backup_jobs` d'ir, chiffrés) :
+  - `ir-cassandra` — BDD primaire TheHive. `nodetool flush` + `nodetool snapshot`
+    du keyspace `thehive` (cohérent, hardlinks) → tar du snapshot. Contient
+    `schema.cql` + SSTables → **restaurable schéma inclus**.
+  - `ir-thehive-files` — pièces jointes (`thehive/data/files`) + config TheHive.
+  - `ir-cortex-es` — store primaire Cortex (`cortex/es-data`), sauvegarde **à froid**
+    (arrêt ~qq sec de `cortex-elasticsearch`, trap = redémarrage garanti).
+  - ES TheHive (`thehive_global`) **non sauvegardé** : index reconstructible depuis
+    Cassandra (réindexation TheHive au restore).
+- **Restaurer** :
+  1. Reproduire le déploiement (configs + `.env` depuis `dot.env.template`), stack à l'arrêt.
+  2. **Cassandra** : démarrer `cassandra`, laisser TheHive créer le schéma OU appliquer
+     `schema.cql`, copier les SSTables du snapshot dans les dossiers de chaque table,
+     puis `nodetool refresh thehive <table>`.
+  3. **Cortex ES** : décompresser `ir-cortex-es` dans `cortex/es-data` (ES arrêté), démarrer.
+  4. **TheHive** : démarrer, réindexer si besoin ; restaurer les pièces jointes.
+  - ⚠️ Les **données** ne couvrent pas les jobs Cortex en cours ni les logs (volatils).

@@ -1,11 +1,31 @@
 ---
 scheduled_tasks:
-  - {name: backup, description: "Sauvegarde quotidienne configs TheHive/Cortex", calendar: "01:30", random_delay: 30m, script: backup.sh}
+  - {name: backup, description: "Sauvegarde quotidienne TheHive/Cortex (config + données)", calendar: "01:30", random_delay: 30m, script: backup.sh}
   - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
 
-# Ne sauvegarde QUE les configs (compose, .env, templates, application.conf) —
-# pas les ~800 Mo de données Cassandra/ES (sauvegarde de données = chantier à part).
+# Sauvegardes chiffrées de la stack IR (déployée hors-repo depuis ~/docker).
+#   config   : compose/.env/templates/application.conf
+#   cassandra: BDD primaire TheHive — snapshot cohérent (flush + nodetool snapshot),
+#              trap = nettoyage du snapshot quoi qu'il arrive
+#   files    : pièces jointes + config TheHive (non régénérables)
+#   cortex-es: store primaire Cortex — sauvegarde À FROID (arrêt ~qq sec, ES 772K),
+#              trap = redémarrage garanti d'ES même en cas d'échec
+# ES TheHive (thehive_global) NON sauvegardé : index reconstructible depuis Cassandra
+# (réindexation TheHive au restore). Cf. services/deploiements-amont/README.md.
 backup_jobs:
   10-ir-config: |
     find /home/debian/docker -maxdepth 2 -type f \( -name 'docker-compose*.yml' -o -name 'compose*.y*ml' -o -name '.env' -o -name '*.env' -o -name 'dot.env.template' -o -name '*.conf' \) -print0 \
       | tar czf - --null --no-recursion -T - 2>/dev/null | enc > "$DAILY/ir-config.tar.gz.enc"
+  20-ir-cassandra: |
+    docker exec cassandra nodetool clearsnapshot -t hlbak >/dev/null 2>&1 || true
+    trap 'docker exec cassandra nodetool clearsnapshot -t hlbak >/dev/null 2>&1 || true' EXIT
+    docker exec cassandra nodetool flush
+    docker exec cassandra nodetool snapshot -t hlbak thehive >/dev/null
+    CDATA=/home/debian/docker/prod1-thehive/cassandra/data/data
+    ( cd "$CDATA" && find . -type d -path '*/snapshots/hlbak' -print0 | tar czf - --null -T - ) | enc > "$DAILY/ir-cassandra.tar.gz.enc"
+  30-ir-thehive-files: |
+    tar czf - -C /home/debian/docker/prod1-thehive thehive/data/files thehive/config 2>/dev/null | enc > "$DAILY/ir-thehive-files.tar.gz.enc"
+  40-ir-cortex-es: |
+    docker stop cortex-elasticsearch >/dev/null
+    trap 'docker start cortex-elasticsearch >/dev/null 2>&1 || true' EXIT
+    tar czf - -C /home/debian/docker/cortex es-data | enc > "$DAILY/ir-cortex-es.tar.gz.enc"
