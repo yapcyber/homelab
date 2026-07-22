@@ -1,0 +1,35 @@
+services:
+  cortex-elasticsearch:
+    image: elasticsearch:8.19.15
+    container_name: cortex-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - thread_pool.search.queue_size=100000
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile:  {soft: 65536, hard: 65536}
+    volumes:
+      - ./es-data:/usr/share/elasticsearch/data
+
+  cortex:
+    image: thehiveproject/cortex:latest      # = Cortex 4.0 (compatible ES 8)
+    container_name: cortex
+    restart: unless-stopped
+    depends_on: [cortex-elasticsearch]
+    command:
+      - --es-uri
+      - http://cortex-elasticsearch:9200
+      - --job-directory
+      - /opt/cortex/jobs
+      - --docker-job-directory
+      - /opt/cortex/jobs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/cortex/jobs:/opt/cortex/jobs
+      - ./application.conf:/etc/cortex/application.conf:ro
+      - ./custom-analyzers:/opt/custom-analyzers:ro
+    ports:
+      - "0.0.0.0:9001:9001"

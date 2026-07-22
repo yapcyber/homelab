@@ -1,0 +1,11 @@
+# Garde-fou : les secrets des stacks amont ne vont JAMAIS ici (uniquement dans
+# les sauvegardes chiffrées). Seuls les .enc.env (SOPS) seraient autorisés.
+.env
+*.env
+!*.enc.env
+!dot.env.template
+!versions.env
+application.conf
+*.pem
+*.key
+*.crt
