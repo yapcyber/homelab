@@ -1,3 +1,11 @@
 ---
 scheduled_tasks:
+  - {name: backup, description: "Sauvegarde quotidienne configs TheHive/Cortex", calendar: "01:30", random_delay: 30m, script: backup.sh}
   - {name: docker-health, description: "Health-check horaire des conteneurs", calendar: hourly, script: docker-health.sh}
+
+# Ne sauvegarde QUE les configs (compose, .env, templates, application.conf) —
+# pas les ~800 Mo de données Cassandra/ES (sauvegarde de données = chantier à part).
+backup_jobs:
+  10-ir-config: |
+    find /home/debian/docker -maxdepth 2 -type f \( -name 'docker-compose*.yml' -o -name 'compose*.y*ml' -o -name '.env' -o -name '*.env' -o -name 'dot.env.template' -o -name '*.conf' \) -print0 \
+      | tar czf - --null --no-recursion -T - 2>/dev/null | enc > "$DAILY/ir-config.tar.gz.enc"

@@ -5,5 +5,5 @@ scheduled_tasks:
 
 backup_jobs:
   10-osint-home: |
-    tar czf "$DAILY/osint.tar.gz" -C /home/debian osint 2>/dev/null || [ $? -le 1 ]
+    { tar czf - -C /home/debian osint 2>/dev/null || [ $? -le 1 ]; } | enc > "$DAILY/osint.tar.gz.enc"
 docker_restricted_ports: [5001]

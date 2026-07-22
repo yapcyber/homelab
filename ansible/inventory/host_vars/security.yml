@@ -7,4 +7,6 @@ scheduled_tasks:
 backup_jobs:
   10-wazuh-etc: |
     docker cp -q single-node-wazuh.manager-1:/var/ossec/etc - | gzip | enc > "$DAILY/wazuh-etc.tar.gz.enc"
+  20-wazuh-deploy: |
+    tar czf - --exclude=.git -C /home/debian wazuh-docker | enc > "$DAILY/wazuh-deploy.tar.gz.enc"
 docker_restricted_ports: [443, 55000]
