@@ -63,7 +63,8 @@ est réservé à Traefik et au VLAN Admin.
 - Nextcloud et Nextcloud Talk HPB ;
 - Immich ;
 - Home Assistant ;
-- Dawarich, Wanderer et SplitPro.
+- Dawarich, Wanderer et SplitPro ;
+- SiYuan (base de connaissance / second brain) et Stirling PDF (boîte à outils PDF).
 
 ### Médias et lecture
 
@@ -97,6 +98,7 @@ est réservé à Traefik et au VLAN Admin.
 ### Projets complémentaires
 
 - Kyber sur le PC Gaming pour le cloud gaming en accès VPN-only ;
+- RomM pour la gestion et l'émulation de ROMs rétrogaming, en accès VPN-only ;
 - backend LLM local Tarasque/Ollama, hors de ce dépôt ;
 - pipeline CV-as-Code en cours de développement ;
 - serveur mail receive-only prévu, non déployé.
@@ -134,15 +136,18 @@ Des timers systemd versionnés assurent notamment :
 - rappel de test de restauration ;
 - fenêtre hebdomadaire snapshot puis patch Ansible.
 
-Les alertes convergent vers ntfy. Une sauvegarde n'est considérée fiable qu'après
-un test de restauration ; cette validation reste un chantier prioritaire.
+Les alertes convergent vers ntfy. Les sauvegardes locales chiffrées sont complétées
+par une **copie hors-site chiffrée côté client** (restic vers Google Drive, automatisée)
+et une **copie USB LUKS air-gap** — schéma 3-2-1-1. Une sauvegarde n'est considérée
+fiable qu'après un test de restauration ; cette validation reste prioritaire.
 
 ## Gestion des secrets
 
 - les `.env`, clés, certificats et données runtime sont ignorés par Git ;
 - Ansible Vault chiffre actuellement les secrets utilisés par l'inventaire ;
-- SOPS + Age est configuré dans `.sops.yaml`, mais aucun secret SOPS n'est encore
-  versionné : il s'agit pour l'instant d'un socle préparatoire ;
+- SOPS + Age (`.sops.yaml`) chiffre des secrets **versionnés** (`*.enc.env` : codes
+  d'accès applicatifs, mot de passe du dépôt restic, passphrase du state OpenTofu…),
+  la clé privée Age restant hors dépôt ;
 - `prompting/` est volontairement exclu du dépôt public, car il contient la
   cartographie détaillée, l'état de travail et des informations personnelles.
 
@@ -197,7 +202,7 @@ ne figurent volontairement pas dans cette vue publique.
 ### Priorités
 
 1. sortir les disques système des VMs du NFS TrueNAS sur pont USB ;
-2. tester régulièrement les restaurations et externaliser les clés de sauvegarde ;
+2. tester régulièrement les restaurations depuis le dépôt hors-site (Drive) et finaliser la custody des clés de sauvegarde (Vaultwarden + USB) ;
 3. ajouter une CI de validation des Compose, playbooks, IaC et règles Sigma ;
 4. généraliser OpenTofu aux VMs de production ;
 5. microsegmenter davantage le VLAN Production ;
