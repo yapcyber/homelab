@@ -14,7 +14,7 @@
 # =============================================================================
 services:
   siyuan:
-    image: b3log/siyuan:latest        # à épingler par digest (Renovate)
+    image: b3log/siyuan:v3.7.3@sha256:908faf8ec55d391d95244982c081edabbaec118552d01fc3dc189d098cc0ffc8   # épinglé version+digest (Renovate)
     container_name: siyuan
     restart: unless-stopped
     security_opt:
