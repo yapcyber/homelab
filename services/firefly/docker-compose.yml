@@ -7,7 +7,7 @@ services:
     ports: [ "8080:8080" ]
     depends_on: [ db ]
   db:
-    image: mariadb:11
+    image: mariadb:11.8.8@sha256:be1ef4fe5f14589325c08a41c76334097ce66c86264b75e1d28342c742782a61   # épinglé version+digest (Renovate)
     restart: unless-stopped
     env_file: .db.env
     volumes: [ "db:/var/lib/mysql" ]

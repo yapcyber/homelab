@@ -1,0 +1,5 @@
+# Secrets firefly — jamais dans Git (provisionnés sur la VM, sauvegardés chiffrés).
+.env
+.db.env
+.importer.env
+*.pem
