@@ -1,0 +1,2 @@
+# Secret jellystat — provisionné sur la VM, jamais dans Git.
+.env
