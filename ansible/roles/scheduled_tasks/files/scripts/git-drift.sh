@@ -31,13 +31,15 @@ fi
 
 # --- 2. Déploiements hors-repo ----------------------------------------------
 # Best-effort : nécessite l'accès Docker (sinon ignoré silencieusement).
+# Allowlist : stacks amont volumineux gérés depuis leur propre clone (par choix,
+# trop complexes à ré-écrire dans le repo). Retirer un préfixe ici si on réconcilie.
+ALLOW_OFFREPO="/home/debian/netbox-docker /home/debian/wazuh-docker /home/debian/greenbone-community-container /home/debian/osint /home/debian/docker"
 if command -v docker >/dev/null 2>&1; then
   offrepo=$(docker ps --format '{{.Names}}' 2>/dev/null | while read -r c; do
     wd=$(docker inspect "$c" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null)
-    case "$wd" in
-      ""|"$HOME/homelab/"*) ;;                 # pas un projet compose, ou sous le repo → OK
-      *) echo "  - $c  ($wd)" ;;
-    esac
+    case "$wd" in ""|"$HOME/homelab/"*) continue ;; esac   # pas compose, ou sous le repo → OK
+    for a in $ALLOW_OFFREPO; do case "$wd" in "$a"*) continue 2 ;; esac; done  # amont intentionnel
+    echo "  - $c  ($wd)"
   done)
   if [ -n "$offrepo" ]; then
     /usr/local/bin/homelab-alert "🧩 $(hostname) : conteneur(s) déployé(s) HORS du repo GitOps" "$offrepo
