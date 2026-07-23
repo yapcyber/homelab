@@ -94,7 +94,24 @@ quelle distance, à quelle vitesse » se trouve ce stockage. Trois pistes pesée
   immédiat nul, mais on sacrifie une capacité de sécurité et, avec un disque
   unique, on recrée la non-redondance que l'on cherchait à fuir.
 
+**Variante séduisante, écartée.** L'arrivée d'un backbone 10G (via un routeur
+grand public récent doté d'un emplacement NVMe) suggère une piste tentante : faire
+de ce NVMe le stockage partagé, « mis en miroir » avec un poste de travail
+toujours allumé lui aussi raccordé en 10G. Deux raisons de la recaler. D'abord, on
+ne peut pas mettre en miroir *à chaud* deux stockages réseau indépendants sans une
+brique de réplication maîtrisée aux deux extrémités — impossible sur un équipement
+à firmware fermé ; il n'en resterait qu'une copie décalée, soit de la reprise
+après sinistre, pas de la disponibilité continue. Ensuite, adosser le stockage des
+VM au routeur couple stockage et accès Internet : une mise à jour qui redémarre la
+box fait tomber les deux ensemble. Conclusion retenue : on prend le 10G, l'
+emplacement NVMe devient une cible de sauvegarde locale rapide, et le stockage
+partagé reste un **NAS dédié raccordé directement au commutateur**.
+
 **Leçon.** En virtualisation, la disponibilité se gagne d'abord au niveau du
-stockage : activer la bascule ne protège de rien tant que le disque des VM dépend
-d'un seul nœud. Nommer le vrai goulot — ici l'architecture de stockage, pas la
-fonction HA — vaut mieux qu'activer une protection en trompe-l'œil.
+stockage, et deux objectifs souvent confondus doivent être séparés : protéger la
+*donnée* (une copie suffit) et garantir la *disponibilité* (il faut une redondance
+vivante). Activer la bascule ne protège de rien tant que le disque des VM dépend
+d'un seul nœud ; une seconde contrainte — la marge mémoire nécessaire pour qu'un
+nœud accueille la charge d'un voisin — reste dimensionnante et souvent limitée par
+le coût. Nommer les vrais goulots, ici l'architecture de stockage et la capacité,
+vaut mieux qu'activer une protection en trompe-l'œil.
