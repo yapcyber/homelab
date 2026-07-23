@@ -62,3 +62,39 @@ invitations permettent l'enrôlement contrôlé.
 
 **Étape suivante.** SOPS et Age préparent la livraison chiffrée. La clé privée de
 récupération reste hors de Git et doit posséder une sauvegarde indépendante.
+
+## La haute disponibilité butait sur le stockage, pas sur la configuration
+
+**Signal.** Objectif : qu'une VM bascule automatiquement sur un nœud survivant en
+cas de panne d'hyperviseur, avec un système de priorités. La fonction existe
+nativement dans l'orchestrateur — il « suffirait » de l'activer.
+
+**Investigation.** L'audit — trois nœuds, quorum sain, pile HA déjà présente —
+déplace le problème. Une VM ne peut redémarrer ailleurs que si son disque y est
+atteignable : or le stockage « partagé » était en réalité servi par une VM
+tournant sur un seul nœud, adossée à un disque unique non redondant. Panne de ce
+nœud → plus de stockage → aucune VM ne redémarre. S'y ajoute l'absence de marge
+mémoire : nœuds à 80–95 %, aucun ne pouvant absorber la charge d'un voisin (règle
+N+1 non tenue).
+
+**Réponse.** La configuration HA est la partie facile et déjà prête ; le chantier
+réel est le socle. Une loi cadre l'arbitrage : un disque de VM servi par le réseau
+est borné par la latence et le débit — centraliser pour la HA échange de la
+vitesse locale contre une vitesse réseau, et le bon compromis se joue sur « à
+quelle distance, à quelle vitesse » se trouve ce stockage. Trois pistes pesées :
+
+- **Stockage cloud** — écarté pour du disque « à chaud » : chaque entrée/sortie
+  traverserait le WAN (latence et débit montant), ralentissant tout le système, et
+  l'accès Internet deviendrait un point de défaillance. Sa place est en sauvegarde
+  hors-site, pas en stockage primaire.
+- **NAS dédié** — la réponse correcte : indépendant des nœuds de calcul, disques
+  en miroir. Contreparties : coût matériel et, pour ne pas brider les I/O, une
+  montée réseau vers 10G (le 1G devenant le nouveau goulot).
+- **Recycler une machine existante** (par exemple une sonde de supervision) — coût
+  immédiat nul, mais on sacrifie une capacité de sécurité et, avec un disque
+  unique, on recrée la non-redondance que l'on cherchait à fuir.
+
+**Leçon.** En virtualisation, la disponibilité se gagne d'abord au niveau du
+stockage : activer la bascule ne protège de rien tant que le disque des VM dépend
+d'un seul nœud. Nommer le vrai goulot — ici l'architecture de stockage, pas la
+fonction HA — vaut mieux qu'activer une protection en trompe-l'œil.
