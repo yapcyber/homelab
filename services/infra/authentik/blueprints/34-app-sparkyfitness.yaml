@@ -17,6 +17,10 @@ entries:
       sub_mode: hashed_user_id
       issuer_mode: per_provider
       include_claims_in_id_token: true
+      # Authentik 2026.5 : grant types explicites (sans ça → "Invalid grant_type").
+      grant_types:
+        - authorization_code
+        - refresh_token
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
