@@ -1,0 +1,30 @@
+---
+- name: Livrer le .env SOPS de SparkyFitness (secrets DB + OIDC)
+  hosts: cloud
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    sops_stacks:
+      - name: SparkyFitness
+        encrypted_file: "{{ repo_root }}/services/cloud/sparkyfitness/sparkyfitness.enc.env"
+        remote_stack: /home/debian/homelab/services/cloud/sparkyfitness
+        services:
+          - sparkyfitness-db
+          - sparkyfitness-server
+          - sparkyfitness-frontend
+        containers:
+          - sparkyfitness-db
+          - sparkyfitness-server
+          - sparkyfitness-frontend
+        require_healthy: true
+        health_retries: 40
+        healthcheck_url: https://fitness.yapserver.fr/
+        healthcheck_status: [200]
+  tasks:
+    - name: Livrer et redémarrer SparkyFitness avec contrôles
+      ansible.builtin.include_role:
+        name: sops_env_delivery
+      loop: "{{ sops_stacks }}"
+      loop_control:
+        loop_var: sops_stack
+        label: "{{ sops_stack.name }}"
