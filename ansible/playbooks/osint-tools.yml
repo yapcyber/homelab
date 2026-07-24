@@ -1,0 +1,6 @@
+---
+# Outils OSINT en ligne de commande (exiftool, holehe, ghunt) sur la VM osint.
+- name: Outils OSINT CLI
+  hosts: osint
+  roles:
+    - osint_tools

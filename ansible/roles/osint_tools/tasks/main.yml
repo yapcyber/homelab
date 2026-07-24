@@ -1,0 +1,70 @@
+---
+# Outils OSINT en ligne de commande sur la VM osint.
+# exiftool via apt (root) ; holehe et ghunt via pipx installés POUR l'utilisateur
+# debian — le groupe services impose ansible_become=true, qu'on neutralise via
+# `vars: ansible_become: false` sur le bloc (le keyword task `become:` seul ne
+# suffit pas à battre la variable de connexion).
+- name: Paquets système (exiftool + pipx)
+  become: true
+  ansible.builtin.apt:
+    name:
+      - libimage-exiftool-perl   # exiftool
+      - pipx
+      - python3-venv
+    state: present
+    update_cache: true
+
+- name: Nettoyer d'éventuelles installations pipx faites en root (correctif)
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail
+    for p in holehe ghunt; do
+      if pipx list --short 2>/dev/null | grep -qw "$p"; then pipx uninstall "$p"; fi
+    done
+  args:
+    executable: /bin/bash
+  register: root_cleanup
+  changed_when: "'uninstalled' in root_cleanup.stdout"
+
+- name: Outils pipx pour l'utilisateur debian (sans élévation)
+  vars:
+    ansible_become: false
+  block:
+    - name: pipx ensurepath (~/.local/bin dans le PATH)
+      ansible.builtin.command: pipx ensurepath
+      register: pipx_path
+      changed_when: "'been added' in pipx_path.stdout"
+      failed_when: false
+
+    - name: Installer holehe (pipx)
+      ansible.builtin.shell: |
+        set -o pipefail
+        pipx list --short 2>/dev/null | grep -qw holehe || pipx install holehe
+      args:
+        executable: /bin/bash
+      register: holehe_install
+      changed_when: "'installed package' in holehe_install.stdout"
+
+    - name: Installer ghunt (pipx) — auth Google requise au 1er usage
+      ansible.builtin.shell: |
+        set -o pipefail
+        pipx list --short 2>/dev/null | grep -qw ghunt || pipx install ghunt
+      args:
+        executable: /bin/bash
+      register: ghunt_install
+      changed_when: "'installed package' in ghunt_install.stdout"
+
+    - name: Vérifier les binaires (côté utilisateur debian)
+      ansible.builtin.shell: |
+        echo "user=$(whoami) HOME=$HOME"
+        echo "exiftool: $(command -v exiftool || echo MANQUANT)"
+        echo "holehe:   $(ls "$HOME"/.local/bin/holehe 2>/dev/null || echo MANQUANT)"
+        echo "ghunt:    $(ls "$HOME"/.local/bin/ghunt 2>/dev/null || echo MANQUANT)"
+      args:
+        executable: /bin/bash
+      register: osint_check
+      changed_when: false
+
+- name: Récapitulatif
+  ansible.builtin.debug:
+    var: osint_check.stdout_lines
