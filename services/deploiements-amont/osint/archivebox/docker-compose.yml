@@ -1,0 +1,25 @@
+# ArchiveBox — archivage web self-hosted.
+# VM osint (10.0.30.17), déployé hors-repo dans ~/osint/archivebox (couvert par
+# la sauvegarde chiffrée osint). Accès VPN-only via Traefik (archive.yapserver.fr).
+# Index privé (login requis) : créer l'admin une fois avec
+#   docker compose exec archivebox archivebox manage createsuperuser
+services:
+  archivebox:
+    image: archivebox/archivebox:latest@sha256:1a5a37331091d9df865ead2b9c231aa5a892fc26fe0422ce6140d9e2d9532327
+    container_name: archivebox
+    restart: unless-stopped
+    command: server --quick-init 0.0.0.0:8000
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - ALLOWED_HOSTS=*
+      - CSRF_TRUSTED_ORIGINS=https://archive.yapserver.fr
+      - PUBLIC_INDEX=False        # index privé (login requis)
+      - PUBLIC_SNAPSHOTS=False
+      - PUBLIC_ADD_VIEW=False
+    volumes:
+      - ./data:/data
+    ports:
+      - "8000:8000"

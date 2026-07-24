@@ -1,0 +1,15 @@
+http:
+  routers:
+    archivebox:
+      rule: "Host(`archive.yapserver.fr`)"
+      entryPoints: [websecure]
+      tls: {certResolver: cloudflare}
+      # VPN-only (internal-only). Archivage web self-hosted sur la VM osint.
+      middlewares: [internal-only@file, security-headers@file]
+      service: archivebox-svc
+
+  services:
+    archivebox-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.17:8000"
