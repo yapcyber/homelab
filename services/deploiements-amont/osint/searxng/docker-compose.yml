@@ -1,0 +1,20 @@
+# SearXNG — métamoteur de recherche self-hosted.
+# VM osint (10.0.30.17), déployé hors-repo dans ~/osint/searxng (couvert par la
+# sauvegarde chiffrée osint). Accès VPN-only via Traefik (search.yapserver.fr).
+# Le secret (server.secret_key) vit dans config/settings.yml sur la VM, jamais
+# dans le repo — voir settings.yml.example. Limiteur désactivé (instance privée).
+services:
+  searxng:
+    image: searxng/searxng:latest@sha256:854f239d5c181db9c4282cd0ffc1737a61232dd6ad0ea964028b96df17d7758a
+    container_name: searxng
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID, DAC_OVERRIDE]
+    environment:
+      - SEARXNG_BASE_URL=https://search.yapserver.fr/
+    volumes:
+      - ./config:/etc/searxng
+    ports:
+      - "8080:8080"

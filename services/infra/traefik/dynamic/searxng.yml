@@ -1,0 +1,15 @@
+http:
+  routers:
+    searxng:
+      rule: "Host(`search.yapserver.fr`)"
+      entryPoints: [websecure]
+      tls: {certResolver: cloudflare}
+      # VPN-only (internal-only). Métamoteur self-hosted sur la VM osint.
+      middlewares: [internal-only@file, security-headers@file]
+      service: searxng-svc
+
+  services:
+    searxng-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.17:8080"

@@ -1,0 +1,19 @@
+# Gabarit de config SearXNG (config/settings.yml sur la VM).
+# Générer le secret sur la VM : openssl rand -hex 32, puis remplacer le
+# placeholder. Le fichier réel (avec secret) n'est jamais versionné.
+use_default_settings: true
+general:
+  instance_name: "YapServer Search"
+  privacypolicy_url: false
+  contact_url: false
+server:
+  secret_key: "REMPLACER_PAR_openssl_rand_hex_32"
+  limiter: false          # instance privée (VPN-only) → pas de rate-limiter/redis
+  image_proxy: true
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+ui:
+  default_locale: fr
