@@ -1,0 +1,73 @@
+# =============================================================================
+# services/cloud/sparkyfitness/docker-compose.yml — SparkyFitness (tracker santé)
+# =============================================================================
+# VM cloud (10.0.30.12). Accès VPN-only via Traefik (dynamic/fitness.yml,
+# internal-only) → frontend nginx sur :3004. 3 conteneurs : postgres + backend
+# + frontend. Secrets dans .env (gitignoré, livré par SOPS → sparkyfitness.enc.env).
+# Vision AI (analyse d'image repas) non configurée = pas de clé cloud (local-first).
+# =============================================================================
+services:
+  sparkyfitness-db:
+    image: postgres:18.3-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+    container_name: sparkyfitness-db
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    environment:
+      POSTGRES_DB: ${SPARKY_FITNESS_DB_NAME:?}
+      POSTGRES_USER: ${SPARKY_FITNESS_DB_USER:?}
+      POSTGRES_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD:?}
+      PUID: 1000
+      GUID: 1000
+    volumes:
+      - ./postgresql:/var/lib/postgresql
+    networks: [sparkyfitness-network]
+
+  sparkyfitness-server:
+    image: codewithcj/sparkyfitness_server:latest@sha256:6aa7d9832324ea403be144a26398a82afbf04abbb4da89f9d04ba61838516b3f
+    container_name: sparkyfitness-server
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    depends_on: [sparkyfitness-db]
+    environment:
+      SPARKY_FITNESS_LOG_LEVEL: ${SPARKY_FITNESS_LOG_LEVEL:-ERROR}
+      SPARKY_FITNESS_DB_HOST: sparkyfitness-db
+      SPARKY_FITNESS_DB_PORT: 5432
+      SPARKY_FITNESS_DB_NAME: ${SPARKY_FITNESS_DB_NAME:?}
+      SPARKY_FITNESS_DB_USER: ${SPARKY_FITNESS_DB_USER:?}
+      SPARKY_FITNESS_DB_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD:?}
+      SPARKY_FITNESS_APP_DB_USER: ${SPARKY_FITNESS_APP_DB_USER:?}
+      SPARKY_FITNESS_APP_DB_PASSWORD: ${SPARKY_FITNESS_APP_DB_PASSWORD:?}
+      SPARKY_FITNESS_API_ENCRYPTION_KEY: ${SPARKY_FITNESS_API_ENCRYPTION_KEY:?}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL:?}
+      SPARKY_FITNESS_DISABLE_SIGNUP: ${SPARKY_FITNESS_DISABLE_SIGNUP:-false}
+      SPARKY_FITNESS_FORCE_EMAIL_LOGIN: "true"
+      SPARKY_FITNESS_ADMIN_EMAIL: ${SPARKY_FITNESS_ADMIN_EMAIL:-}
+      NODE_ENV: production
+      TZ: ${TZ:-Europe/Paris}
+      PUID: 1000
+      GUID: 1000
+    volumes:
+      - ./backup:/app/SparkyFitnessServer/backup
+      - ./uploads:/app/SparkyFitnessServer/uploads
+    networks: [sparkyfitness-network]
+
+  sparkyfitness-frontend:
+    image: codewithcj/sparkyfitness:latest@sha256:46d90e46bd87312fcbbbb05036d99e4cb1c821e928b0516ee727de4c3c90752b
+    container_name: sparkyfitness-frontend
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    depends_on: [sparkyfitness-server]
+    environment:
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL:?}
+      SPARKY_FITNESS_SERVER_HOST: sparkyfitness-server
+      SPARKY_FITNESS_SERVER_PORT: 3010
+      PUID: 1000
+      GUID: 1000
+    ports:
+      - "3004:80"                     # atteint par Traefik ; filtré par docker_ingress_filter
+    networks: [sparkyfitness-network]
+
+networks:
+  sparkyfitness-network:
+    driver: bridge

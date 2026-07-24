@@ -1,0 +1,5 @@
+# Secrets et données runtime — jamais dans Git (secrets livrés via SOPS .enc.env)
+.env
+postgresql/
+backup/
+uploads/

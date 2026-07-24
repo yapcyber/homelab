@@ -1,0 +1,15 @@
+http:
+  routers:
+    sparkyfitness:
+      rule: "Host(`fitness.yapserver.fr`)"
+      entryPoints: [websecure]
+      tls: {certResolver: cloudflare}
+      # VPN-only (internal-only). Tracker santé self-hosted sur la VM cloud.
+      middlewares: [internal-only@file, security-headers@file]
+      service: sparkyfitness-svc
+
+  services:
+    sparkyfitness-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.30.12:3004"
